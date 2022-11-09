@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import os
 import argparse
-import satsolver
+from satsolver import dimacs, dpll
 
 # DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -21,22 +21,32 @@ def main():
     )
 
     args = parser.parse_args()
-
     if args.strategy not in [1, 2, 3]:
         print(
             f"ERROR: provided strategy ({args.strategy}) must be an int in range [1,3]"
         )
         exit(1)
 
+    # parse input file
     if not os.path.isfile(args.inputfile):
         print(f"ERROR: input file not found '{args.inputfile}'")
         exit(1)
 
-    print(f"running SAT with strategy {args.strategy} on file '{args.inputfile}'")
+    with open(args.inputfile, "r") as f:
+        lines = [line for line in f.readlines()]
 
-    # TODO:
-    print("\nnot implemented yet!!!")
-    exit(1)
+    print("parsing file...")
+    system = dimacs.parse_string("".join(lines))
+
+    print(f"running strategy {args.strategy} on system!")
+    if args.strategy == 1:
+        dpll(system)
+        print("done!")
+        # TODO: write result to a file?
+    else:
+        # TODO:
+        print("\nnot implemented yet!!!")
+        exit(1)
 
 
 if __name__ == "__main__":

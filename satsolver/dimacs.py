@@ -10,11 +10,14 @@ def parse_string(contents: str) -> Disjunction:
         if not line:  # blank line
             continue
         tokens = line.split(" ")
+        if tokens[0] == "c":
+            continue  # ignore comments
         if tokens[0] == "p":
             continue  # ignore this line for now
         tokens = tokens[:-1]  # throw away 0 at end
 
         tokens = [int(t) for t in tokens]
+        # TODO: throw error if 0 in tokens
         res.append(set(tokens))
 
     return res
