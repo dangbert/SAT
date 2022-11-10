@@ -38,15 +38,24 @@ def main():
     print("parsing file...")
     system = dimacs.parse_string("".join(lines))
 
-    print(f"running strategy {args.strategy} on system!")
+    print(f"running strategy {args.strategy} on system...\n")
     if args.strategy == 1:
-        dpll(system)
-        print("done!")
-        # TODO: write result to a file?
+        model = {}
+        res = dpll.dpll(system, model)
     else:
         # TODO:
         print("\nnot implemented yet!!!")
         exit(1)
+
+    if not res:
+        print("system is inconsistent!")
+        exit(0)
+
+    outputfile = f"{os.path.basename(args.inputfile)}.out"
+    with open(outputfile, "w") as f:
+        f.write(dimacs.to_dimacs(system))
+    print(f"\nwrote result to '{outputfile}'")
+    # TODO: write model somewhere?
 
 
 if __name__ == "__main__":

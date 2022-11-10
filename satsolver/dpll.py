@@ -2,9 +2,10 @@ from copy import deepcopy
 from satsolver import Disjunction, Conjunction, Model
 
 
-def dpll(system: Conjunction, model: Model = {}) -> bool:
+def dpll(system: Conjunction, model: Model) -> bool:
     """
-    Run the dpll algorithm.
+    Runs the dpll algorithm, returning True if a solution is found.
+    The param model will be updated in place to the solution (if any).
     """
 
     if not simplify(system, model):
@@ -19,7 +20,7 @@ def dpll(system: Conjunction, model: Model = {}) -> bool:
     # if (dpll_2(α, ¬P)) return true;
     # return dpll_2(α, P);
 
-    pass  # TODO
+    return True  # TODO
 
 
 # def simplify_unit_clauses(system: Conjunction, model: Model, tautologies: bool = True, unit_clauses: bool=True, pure_literals:bool=True) -> bool:
@@ -45,12 +46,12 @@ def simplify(
 
         # handle unit clauses
         if unit_clauses and len(clause) == 1:
-            term = clause[0]  # e.g. -124
+            term = list(clause)[0]  # e.g. -124
             term_value = term > 0
             if abs(term) in model and model[abs(term)] != term_value:
                 return False  # inconsistent
             model[abs(term)] = term_value  # update model, ensuring this clause is True
-            system.remove(i)
+            system.pop(i)
             continue
 
         if tautologies:
