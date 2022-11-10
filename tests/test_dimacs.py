@@ -1,4 +1,4 @@
-from satsolver import Conjunction, Disjunction
+from satsolver import Conjunction
 from satsolver import dimacs
 
 
@@ -23,7 +23,7 @@ def test_simple_parse():
 
 def test_to_dimacs():
     """Test serializing a logic system to a string."""
-    system: Disjunction = [
+    system: Conjunction = [
         set([111, 112, 113]),
         set([-111, -112]),
     ]
@@ -33,7 +33,7 @@ def test_to_dimacs():
 
 
 def test_bidirectional_encoding():
-    """Test we can encode/decode from dimacs string <-> Disjunction."""
+    """Test we can encode/decode from dimacs string <-> Conjunction."""
     content = "p cnf 3 2\n111 112 113 0\n-111 -112 0\n"
     system = dimacs.parse_string(content)
     res = dimacs.to_dimacs(system)

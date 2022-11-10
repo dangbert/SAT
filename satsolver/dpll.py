@@ -1,5 +1,6 @@
 from copy import deepcopy
 from satsolver import Disjunction, Conjunction, Model
+from typing import MutableSet, Tuple
 
 
 def dpll(system: Conjunction, model: Model) -> bool:
@@ -27,22 +28,31 @@ def dpll(system: Conjunction, model: Model) -> bool:
 def simplify(
     system: Conjunction,
     model: Model,
-    unit_clauses: bool = True,
     tautologies: bool = True,
-    pure_literals: bool = True,
-) -> bool:
+    unit_clauses: bool = True,
+) -> Tuple[bool, MutableSet[int]]:
     """
     Simplifies a system using 3 techiques (or a subset of them), and updating the (ongoing) model.
     returns False if an inconsistency is found.
+    also returns the set of pure literals found in the system.
 
     unit_clauses:
         Simplify the system by removing all unit clauses.
+
     """
     i = 0
+    all_literals = set()
     while True:
         if i > len(system) - 1:
             break
         clause = system[i]
+
+        # handle tautologies e.g. {111, -111, 114}
+        if tautologies:
+            new_clause = set([t for t in clause if -t not in clause])
+            # removed_tokens = clause - new_clause  # e.g. {111, -111}
+            system[i] = new_clause
+            clause = system[i]
 
         # handle unit clauses
         if unit_clauses and len(clause) == 1:
@@ -54,12 +64,13 @@ def simplify(
             system.pop(i)
             continue
 
-        if tautologies:
-            pass
-        if pure_literals:
-            pass
+        all_literals = all_literals.union(
+            clause
+        )  # track all literals (still in system)
         i += 1
-    return True
+
+    pure = set([t for t in all_literals if -t not in all_literals])
+    return True, pure
 
 
 # def simplify_tautologies(system: Conjunction, model: Model) -> None:
