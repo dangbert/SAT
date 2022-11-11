@@ -1,6 +1,7 @@
 import glob
 import os
 import pytest
+import logging
 
 TEST_DIR = os.path.abspath(os.path.dirname(__file__))
 ROOT_DIR = os.path.abspath(os.path.dirname(TEST_DIR))
@@ -9,6 +10,11 @@ ROOT_DIR = os.path.abspath(os.path.dirname(TEST_DIR))
 def pytest_sessionstart(session):
     """runs before all tests start https://stackoverflow.com/a/35394239"""
     print("in sessionstart")
+
+    debug = os.environ.get("DEBUG", "0") == "1"
+    log_level = logging.DEBUG if debug else logging.INFO
+    logging.basicConfig(level=log_level)
+    logging.info(f"setup logging with debug level = {debug}")
     # temporary change that doesn't persist in the terminal after tests complete:
     # if not load_dotenv(override=True, dotenv_path=os.path.join(baseDir, '.env.test')):
     #    print('failed to load dotenv')

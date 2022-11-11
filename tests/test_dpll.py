@@ -5,8 +5,8 @@ from satsolver import dpll, Model, Conjunction
 def test_simplify__unit_clauses__easy():
     system: Conjunction = [
         set([111, 112, 114]),
-        set([-111, -113]),
         set([-115]),
+        set([-111, -113]),
     ]
     expected: Conjunction = [
         set([111, 112, 114]),
@@ -17,6 +17,10 @@ def test_simplify__unit_clauses__easy():
     dpll.simplify(system, model, **args)
     assert system == expected
     assert model == {115: False}
+
+
+def test_simplify__unit_clauses__complicated():
+    args = {"unit_clauses": True, "tautologies": False}
 
     # test other clauses get updated
     system: Conjunction = [
@@ -34,22 +38,18 @@ def test_simplify__unit_clauses__easy():
     assert model == {115: False}
 
     # test other clauses get updated (removed when needed)
-    system: Conjunction = [
+    system = [
         set([111, 112, 114]),
         set([-111, -113, -115]),
         set([-115]),
     ]
-    expected: Conjunction = [
+    expected = [
         set([111, 112, 114]),
     ]
     model = {}
     dpll.simplify(system, model, **args)
     assert system == expected
     assert model == {115: False}
-
-
-def test_simplify__unit_clauses__complicated():
-    args = {"unit_clauses": True, "tautologies": False}
 
     # harder test3 (removal of 115 -> 111 can also be removed)
     system: Conjunction = [

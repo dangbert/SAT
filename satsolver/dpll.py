@@ -1,6 +1,7 @@
 from copy import deepcopy
 from satsolver import Disjunction, Conjunction, Model
 from typing import MutableSet, Tuple
+import logging
 
 
 def dpll(system: Conjunction, model: Model) -> bool:
@@ -11,11 +12,6 @@ def dpll(system: Conjunction, model: Model) -> bool:
 
     if not simplify(system, model):
         return False
-
-    # remove clauses from α containing literal
-    # shorten clauses from α containing ¬literal
-    # if (α contains no clauses) return true;
-    # if (α contains empty clause return false;
 
     # choose P in α;
     # if (dpll_2(α, ¬P)) return true;
@@ -40,8 +36,10 @@ def simplify(
         Simplify the system by removing all unit clauses.
 
     """
+    # logging.debug(f"in simplify, system = {system}\n")
     i = 0
     all_literals = set()
+    run_again = False
     while True:
         if i > len(system) - 1:
             break
@@ -54,6 +52,37 @@ def simplify(
             system[i] = new_clause
             clause = system[i]
 
+        # apply model to simplify if possible
+        if len(clause) == 0:
+            system.pop(i)
+            continue
+
+        remove_tokens = set()
+        clause_removed = False
+        for t in clause:
+            if abs(t) in model:
+                term_val = model[abs(t)] if t > 0 else not model[abs(t)]
+                if term_val == True:  # whole clause must be true
+                    logging.debug(
+                        f"removing clause (known to be true from model): {clause}"
+                    )
+                    system.pop(i)
+                    clause_removed = True
+                    break
+                else:
+                    logging.debug(
+                        f"removing useless token {t} (where {abs(t)} = {model[abs(t)]}) from clause: {clause}"
+                    )
+                    remove_tokens.add(t)
+        if clause_removed:
+            continue
+        if remove_tokens:
+            logging.debug(f"remove_tokens = {remove_tokens}")
+        if len(clause) == len(remove_tokens):
+            return False  # inconsistent (no terms left to make clause true)
+        system[i] = clause - remove_tokens
+        clause = system[i]
+
         # handle unit clauses
         if unit_clauses and len(clause) == 1:
             term = list(clause)[0]  # e.g. -124
@@ -62,6 +91,7 @@ def simplify(
                 return False  # inconsistent
             model[abs(term)] = term_value  # update model, ensuring this clause is True
             system.pop(i)
+            run_again = True
             continue
 
         all_literals = all_literals.union(
@@ -70,15 +100,8 @@ def simplify(
         i += 1
 
     pure = set([t for t in all_literals if -t not in all_literals])
+    if run_again:
+        # there may be new unit clauses to handle:
+        logging.debug("calling recursively")
+        return simplify(system, model, tautologies=False, unit_clauses=True)
     return True, pure
-
-
-# def simplify_tautologies(system: Conjunction, model: Model) -> None:
-#    # TODO
-#    return True
-#
-#
-# def simplify_pure_literals(system: Conjunction, model: Model) -> None:
-#    # TODO
-#    return True
-#
