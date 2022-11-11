@@ -1,4 +1,4 @@
-from copy import deepcopy
+import copy
 from satsolver import Disjunction, Conjunction, Model
 from typing import MutableSet, Tuple
 import logging
@@ -10,14 +10,33 @@ def dpll(system: Conjunction, model: Model) -> bool:
     The param model will be updated in place to the solution (if any).
     """
 
-    if not simplify(system, model):
+    valid, pure = simplify(system, model)
+    if not valid:
         return False
 
-    # choose P in α;
-    # if (dpll_2(α, ¬P)) return true;
-    # return dpll_2(α, P);
+    new_system = copy.deepcopy(system)
+    new_model = copy.deepcopy(model)
 
-    return True  # TODO
+    if len(system) == 0:
+        logging.warn(f"reached an empty system")
+        return True
+    # choose a variable e.g. -113 to assume its value
+    if len(pure) > 1:
+        var = pure[0]
+    else:
+        var = list(system[0])[0]  # pick arbitrary var
+
+    new_model[abs(var)] = True  # assume True
+    if not dpll(new_system, new_model):
+        new_system = copy.deepcopy(system)
+        new_model = copy.deepcopy(model)
+        new_model[abs(var)] = False  # assume False
+        if not dpll(new_system, new_model):
+            return False
+
+    system = new_system
+    model = new_model
+    return True
 
 
 # def simplify_unit_clauses(system: Conjunction, model: Model, tautologies: bool = True, unit_clauses: bool=True, pure_literals:bool=True) -> bool:

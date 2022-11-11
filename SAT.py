@@ -66,6 +66,7 @@ def main():
         print("system is inconsistent!")
         exit(0)
 
+    # TODO: verify final model includes all vars!
     outputfile = f"{os.path.basename(args.inputfile)}.out"
     with open(outputfile, "w") as f:
         f.write(dimacs.to_dimacs(system))
