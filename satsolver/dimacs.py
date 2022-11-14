@@ -1,10 +1,10 @@
-from satsolver import Conjunction, Disjunction, Model
+from satsolver import Conjunction
 
 
-def parse_string(contents: str) -> Disjunction:
+def parse_string(contents: str) -> Conjunction:
     """Convert a DIMACS string (with newlines) to a Disjunction."""
 
-    res: Disjunction = []
+    res: Conjunction = []
     for line in contents.split("\n"):
         line = line.strip()  # ignore extra whitespace
         if not line:  # blank line
@@ -28,6 +28,13 @@ def parse_string(contents: str) -> Disjunction:
         res.append(set(tokens))
 
     return res
+
+
+def parse_file(fname: str) -> Conjunction:
+    """Parse a .cnf file and return a conjunction."""
+    with open(fname, "r") as f:
+        lines = [line for line in f.readlines()]
+    return parse_string("".join(lines))
 
 
 def to_dimacs(system: Conjunction) -> str:

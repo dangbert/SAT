@@ -2,7 +2,7 @@
 import os
 import argparse
 import logging
-from satsolver import dimacs, dpll, verify_model, model_to_system
+from satsolver import dimacs, dpll, puzzle, verify_model, model_to_system
 
 # DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -54,14 +54,10 @@ def main():
         print(f"ERROR: input file not found '{args.input2}'")
         exit(1)
 
-    with open(args.inputfile, "r") as f:
-        lines = [line for line in f.readlines()]
-    if args.input2:
-        with open(args.input2, "r") as f:
-            lines += [line for line in f.readlines()]
-
     print("parsing file...")
-    system = dimacs.parse_string("".join(lines))
+    system = dimacs.parse_file(args.inputfile)
+    if args.input2:
+        system += dimacs.parse_file(args.input2)
 
     print(f"running strategy {args.strategy} on system...\n")
     if args.strategy == 1:
@@ -76,6 +72,7 @@ def main():
         print("system is inconsistent!")
         exit(0)
 
+    # print(puzzle.visualize_sudoku_model(model, board_size=9))
     # sanity check (should always pass)
     valid, reason = verify_model(system, model)
     if not valid:
