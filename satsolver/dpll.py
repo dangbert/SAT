@@ -18,7 +18,7 @@ def dpll(system: Conjunction, model: Model) -> bool:
     new_model = copy.deepcopy(model)
 
     if len(system) == 0:
-        logging.warn(f"reached an empty system")
+        logging.debug(f"reached an empty system")
         return True
     # choose a variable e.g. -113 to assume its value
     if len(pure) > 1:
@@ -49,11 +49,13 @@ def simplify(
     """
     Simplifies a system using 3 techiques (or a subset of them), and updating the (ongoing) model.
     returns False if an inconsistency is found.
-    also returns the set of pure literals found in the system.
+    also returns the set of pure literals found in the system (when the system is consistent).
 
-    unit_clauses:
-        Simplify the system by removing all unit clauses.
-
+    params:
+        unit_clauses:
+            Simplify the system by removing all unit clauses.
+        tautologies:
+            Simplify the system by removing all tautologies within disjunctions.
     """
     # logging.debug(f"in simplify, system = {system}\n")
     i = 0
@@ -98,7 +100,7 @@ def simplify(
         if remove_tokens:
             logging.debug(f"remove_tokens = {remove_tokens}")
         if len(clause) == len(remove_tokens):
-            return False  # inconsistent (no terms left to make clause true)
+            return False, set()  # inconsistent (no terms left to make clause true)
         system[i] = clause - remove_tokens
         clause = system[i]
 
@@ -107,7 +109,7 @@ def simplify(
             term = list(clause)[0]  # e.g. -124
             term_value = term > 0
             if abs(term) in model and model[abs(term)] != term_value:
-                return False  # inconsistent
+                return False, set()  # inconsistent
             model[abs(term)] = term_value  # update model, ensuring this clause is True
             system.pop(i)
             run_again = True

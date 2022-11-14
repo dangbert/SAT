@@ -1,4 +1,4 @@
-from satsolver import Conjunction, Disjunction
+from satsolver import Conjunction, Disjunction, Model
 
 
 def parse_string(contents: str) -> Disjunction:
@@ -30,7 +30,7 @@ def parse_string(contents: str) -> Disjunction:
     return res
 
 
-def to_dimacs(system: Disjunction) -> str:
+def to_dimacs(system: Conjunction) -> str:
     """Convert a logic system to a (newline delimited) DIMACS string."""
     content = ""
     vars = set()

@@ -2,7 +2,7 @@
 import os
 import argparse
 import logging
-from satsolver import dimacs, dpll
+from satsolver import dimacs, dpll, verify_model, model_to_system
 
 # DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -26,6 +26,12 @@ def main():
     parser.add_argument(
         "-i", "--input2", type=str, help="optional path to second input file"
     )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        help="path to output path (defaults to <inputfile>.out)",
+    )
 
     args = parser.parse_args()
     if args.strategy not in [1, 2, 3]:
@@ -35,6 +41,10 @@ def main():
         exit(1)
     log_level = args.DEBUG if args.debug else logging.INFO
     logging.basicConfig(level=log_level)
+
+    outputfile = f"{os.path.basename(args.inputfile)}.out"
+    if args.output:
+        outputfile = args.output
 
     # parse input file
     if not os.path.isfile(args.inputfile):
@@ -66,15 +76,16 @@ def main():
         print("system is inconsistent!")
         exit(0)
 
-    # TODO: verify final model includes all vars!
-    outputfile = f"{os.path.basename(args.inputfile)}.out"
-    with open(outputfile, "w") as f:
-        f.write(dimacs.to_dimacs(system))
-    print(f"\nwrote result to '{outputfile}'")
+    # sanity check (should always pass)
+    valid, reason = verify_model(system, model)
+    if not valid:
+        print(f"ERROR: solution was invalid! reason = {reason}")
+        exit(1)
 
-    # print(f"final model")
-    # print(model)
-    # TODO: write model somewhere?
+    print(f"found a valid solution!")
+    with open(outputfile, "w") as f:
+        f.write(dimacs.to_dimacs(model_to_system(model)))
+    print(f"\nwrote result to '{outputfile}'")
 
 
 if __name__ == "__main__":
