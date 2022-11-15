@@ -27,6 +27,11 @@ def main():
         "-i", "--input2", type=str, help="optional path to second input file"
     )
     parser.add_argument(
+        "--sudoku",
+        type=int,
+        help="optionally specify size of sudoku board (for visualizing a sudoku solution)",
+    )
+    parser.add_argument(
         "-o",
         "--output",
         type=str,
@@ -39,7 +44,7 @@ def main():
             f"ERROR: provided strategy ({args.strategy}) must be an int in range [1,3]"
         )
         exit(1)
-    log_level = args.DEBUG if args.debug else logging.INFO
+    log_level = logging.DEBUG if args.debug else logging.INFO
     logging.basicConfig(level=log_level)
 
     outputfile = f"{os.path.basename(args.inputfile)}.out"
@@ -72,7 +77,8 @@ def main():
         print("system is inconsistent!")
         exit(0)
 
-    # print(puzzle.visualize_sudoku_model(model, board_size=9))
+    if args.sudoku != None:
+        print(puzzle.visualize_sudoku_model(model, board_size=args.sudoku))
     # sanity check (should always pass)
     valid, reason = verify_model(system, model)
     if not valid:

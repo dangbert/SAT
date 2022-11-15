@@ -1,5 +1,5 @@
 import copy
-from satsolver import Disjunction, Conjunction, Model
+from satsolver import Disjunction, Conjunction, Model, puzzle
 from typing import MutableSet, Tuple
 import logging
 
@@ -7,35 +7,40 @@ import logging
 def dpll(system: Conjunction, model: Model) -> bool:
     """
     Runs the dpll algorithm, returning True if a solution is found.
-    The param model will be updated in place to the solution (if any).
+    The params model and system will both be updated in place.
     """
-
+    # print(puzzle.visualize_sudoku_model(model, board_size=9))
     valid, pure = simplify(system, model)
     if not valid:
         return False
 
-    new_system = copy.deepcopy(system)
-    new_model = copy.deepcopy(model)
-
     if len(system) == 0:
         logging.debug(f"reached an empty system")
         return True
+
     # choose a variable e.g. -113 to assume its value
     if len(pure) > 1:
         var = pure[0]
+        logging.debug(f"splitting on pure var: {var}")
     else:
         var = list(system[0])[0]  # pick arbitrary var
+        logging.debug(f"splitting on first var: {var}")
 
+    new_system = copy.deepcopy(system)
+    new_model = copy.deepcopy(model)
     new_model[abs(var)] = True  # assume True
     if not dpll(new_system, new_model):
+        logging.debug(f"backtracking! (on var {abs(var)})")
         new_system = copy.deepcopy(system)
         new_model = copy.deepcopy(model)
         new_model[abs(var)] = False  # assume False
         if not dpll(new_system, new_model):
             return False
 
-    system = new_system
-    model = new_model
+    # carefully update sytem and model in place (so change is present in the outer scope/function)
+    system[:] = new_system
+    model.clear()
+    model.update(new_model)
     return True
 
 
@@ -47,11 +52,13 @@ def simplify(
     unit_clauses: bool = True,
 ) -> Tuple[bool, MutableSet[int]]:
     """
-    Simplifies a system using 3 techiques (or a subset of them), and updating the (ongoing) model.
+    Simplifies a system (in place) using 2 techiques (or a subset of them), and updates the (ongoing) model.
     returns False if an inconsistency is found.
     also returns the set of pure literals found in the system (when the system is consistent).
 
     params:
+        system: the logic system
+        model: (partial) model for the logic system
         unit_clauses:
             Simplify the system by removing all unit clauses.
         tautologies:
@@ -123,6 +130,6 @@ def simplify(
     pure = set([t for t in all_literals if -t not in all_literals])
     if run_again:
         # there may be new unit clauses to handle:
-        logging.debug("calling recursively")
+        logging.debug("simplify: calling itself recursively")
         return simplify(system, model, tautologies=False, unit_clauses=True)
     return True, pure

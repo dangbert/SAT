@@ -6,6 +6,9 @@ import logging
 TEST_DIR = os.path.abspath(os.path.dirname(__file__))
 ROOT_DIR = os.path.abspath(os.path.dirname(TEST_DIR))
 
+RULES_4X4 = os.path.join(ROOT_DIR, "rules/sudoku-rules-4x4.cnf")
+RULES_9X9 = os.path.join(ROOT_DIR, "rules/sudoku-rules-9x9.cnf")
+
 
 def pytest_sessionstart(session):
     """runs before all tests start https://stackoverflow.com/a/35394239"""

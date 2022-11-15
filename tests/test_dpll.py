@@ -1,7 +1,7 @@
 import copy
 import os
 from satsolver import dpll, dimacs, Model, Conjunction, verify_model, puzzle
-from tests.conftest import ROOT_DIR
+from tests.conftest import ROOT_DIR, RULES_4X4, RULES_9X9
 import logging
 
 
@@ -104,22 +104,66 @@ def test_simplify__finds_pure_literals():
     assert system == cur and model == {}, "unchanged"
     assert res and pure == {-111, 117}
 
+    system.append(set([113]))
+    cur = copy.deepcopy(system)
+    res, pure = dpll.simplify(cur, model, **args)
+    assert system == cur and model == {}, "unchanged"
+    assert res and pure == {-111, 117, 113}
+
 
 def test_sudoku_examples__4x4():
     """Verify dpll can solve set of 4x4 examples."""
-    fname = os.path.join(ROOT_DIR, "datasets/4x4.txt")
-    assert os.path.exists(fname)
+    fname = os.path.join(ROOT_DIR, f"datasets/4x4.txt")
+    sudoku_tester(RULES_4X4, fname, 4)
 
-    rules = dimacs.parse_file(os.path.join(ROOT_DIR, "rules/sudoku-rules-4x4.cnf"))
+
+def test_sudoku_examples__9x9_few():
+    """Verify dpll can solve set of 9x9 examples."""
+    rules = dimacs.parse_file(RULES_9X9)
 
     passed = 0
-    with open(fname, "r") as f:
+    for n in range(1, 5 + 1):
+        fname = os.path.join(ROOT_DIR, f"example_sudokus/sudoku{n}.cnf")
+        system = dimacs.parse_file(fname) + rules
+        model: Model = {}
+
+        res = dpll.dpll(system, model)
+        assert res
+        valid, reason = verify_model(system, model)
+        assert valid
+        passed += 1
+    print(f"{passed} 9x9 examples passed!")
+
+
+# def test_sudoku_examples__9x9_many():
+#    """Verify dpll can solve set of 9x9 examples."""
+#    fnames = [
+#        "damnhard.sdk.txt",
+#        "top91.sdk.txt",
+#        "top95.sdk.txt",
+#        "top100.sdk.txt",
+#        "top870.sdk.txt",
+#        "1000 sudokus.txt",
+#        "top2365.sdk.txt",
+#    ]
+#    for fname in fnames:
+#        print("running on file: " + fname)
+#        fname = os.path.join(ROOT_DIR, "datasets", fname)
+#        assert os.path.exists(fname)
+#        sudoku_tester(RULES_9X9, fname, 9)
+
+
+def sudoku_tester(rules_path: str, dataset_path: str, board_size: int):
+    """Helper function."""
+    size_desc = f"{board_size}x{board_size}"
+    rules = dimacs.parse_file(rules_path)
+
+    passed = 0
+    with open(dataset_path, "r") as f:
         for line in f.readlines():
             if not line:
                 continue
-            if line[-1] == "\n":
-                line = line[:-1]
-            # line.replace("\n", "")
+            line = line.replace("\n", "")
             system = puzzle.encode_puzzle(line)
             system += rules
             model: Model = {}
@@ -129,7 +173,7 @@ def test_sudoku_examples__4x4():
             valid, reason = verify_model(system, model)
             assert valid
             passed += 1
+            # print("\n" + "".join(["_" for _ in range(board_size * 2)]))
+            # print(puzzle.visualize_sudoku_model(model, board_size=board_size))
 
-            # print(puzzle.visualize_sudoku_model(model, board_size=4))
-
-        print(f"{passed} 4x4 examples passed!")
+        print(f"{passed} {size_desc} examples passed!")

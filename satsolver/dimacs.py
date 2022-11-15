@@ -1,3 +1,4 @@
+import os
 from satsolver import Conjunction
 
 
@@ -32,6 +33,7 @@ def parse_string(contents: str) -> Conjunction:
 
 def parse_file(fname: str) -> Conjunction:
     """Parse a .cnf file and return a conjunction."""
+    assert os.path.exists(fname)
     with open(fname, "r") as f:
         lines = [line for line in f.readlines()]
     return parse_string("".join(lines))

@@ -16,6 +16,9 @@ This project uses the [DIMACS](https://logic.pdmi.ras.ru/~basolver/dimacs.html) 
 #   (and optionally specify the output filename with `-o`)
 ./SAT.py -S1 rules/sudoku-rules-9x9.cnf -i example_sudokus/sudoku2.cnf -o out.cnf
 
+# if solving a sudoku problem, you can optionally use `--sudoku [int]` to specify the board size (for visualizing the result)
+./SAT.py rules/sudoku-rules-9x9.cnf -i example_sudokus/sudoku5.cnf  -o out.cnf --sudoku 9
+
 # view full usage / help:
 ./SAT.py -h
 ````
