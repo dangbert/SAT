@@ -21,7 +21,7 @@ def verify_model(system: Conjunction, model: Model) -> Tuple[bool, str]:
         for t in clause:
             if abs(t) not in model:
                 return False, f"var {abs(t)} not in model"
-            vals.append(model[abs(t)] if t > 0 else not model[abs(t)])
+            vals.append(model[t] if t > 0 else not model[abs(t)])
         res = res and True in vals
     return res, f"system/model is {res}"
 

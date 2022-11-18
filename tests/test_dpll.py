@@ -127,7 +127,7 @@ def test_sudoku_examples__9x9_few():
         system = dimacs.parse_file(fname) + rules
         model: Model = {}
 
-        res = dpll.dpll(system, model)
+        res, stats = dpll.solver(system, model)
         assert res
         valid, reason = verify_model(system, model)
         assert valid
@@ -153,7 +153,9 @@ def test_sudoku_examples__9x9_few():
 #        sudoku_tester(RULES_9X9, fname, 9)
 
 
-def sudoku_tester(rules_path: str, dataset_path: str, board_size: int):
+def sudoku_tester(
+    rules_path: str, dataset_path: str, board_size: int, report_stats: bool = False
+):
     """Helper function."""
     size_desc = f"{board_size}x{board_size}"
     rules = dimacs.parse_file(rules_path)
@@ -167,8 +169,10 @@ def sudoku_tester(rules_path: str, dataset_path: str, board_size: int):
             system = puzzle.encode_puzzle(line)
             system += rules
             model: Model = {}
-            res = dpll.dpll(system, model)
+            res, stats = dpll.solver(system, model)
             assert res
+            if report_stats:
+                print(stats)
 
             valid, reason = verify_model(system, model)
             assert valid

@@ -1,5 +1,7 @@
 import copy
 from satsolver import Disjunction, Conjunction, Model, puzzle
+
+# from satsolver.dpll import simplify
 from typing import MutableSet, Tuple, Dict
 import logging
 
@@ -21,7 +23,7 @@ def solver(system: Conjunction, model: Model) -> Tuple[bool, Dict]:
         nonlocal stats  # https://stackoverflow.com/a/11987499
 
         # print(puzzle.visualize_sudoku_model(model, board_size=9))
-        valid, pure = simplify(system, model, tautologies=remove_tautologies)
+        valid, literal_stats = simplify(system, model, tautologies=remove_tautologies)
         if not valid:
             stats["backtracks"] += 1
             return False
@@ -31,15 +33,8 @@ def solver(system: Conjunction, model: Model) -> Tuple[bool, Dict]:
             return True
 
         # choose a variable e.g. -113 to assume its value
-        init_guess = True
-        if len(pure) > 1:
-            var = pure[0]
-            logging.debug(f"splitting on pure var: {var}")
-            stats["pure_literals_used"] += 1
-            init_guess = var > 0  # guess value that makes var true
-        else:
-            var = list(system[0])[0]  # pick arbitrary var
-            logging.debug(f"splitting on first var: {var}")
+        var, init_guess = select_split(literal_stats)
+        logging.debug(f"splitting on variable {var} with initial guess: {init_guess}")
 
         new_system = copy.deepcopy(system)
         new_model = copy.deepcopy(model)
@@ -49,7 +44,9 @@ def solver(system: Conjunction, model: Model) -> Tuple[bool, Dict]:
             new_system = copy.deepcopy(system)
             new_model = copy.deepcopy(model)
             new_model[abs(var)] = not init_guess
+            # stats["backtracks"] += 1
             if not _solver(new_system, new_model):
+                # stats["backtracks"] += 1
                 return False
 
         # carefully update sytem and model in place (so change is present in the outer scope/function)
@@ -63,29 +60,53 @@ def solver(system: Conjunction, model: Model) -> Tuple[bool, Dict]:
     return res, stats
 
 
+def select_split(literal_stats: Dict) -> Tuple[int, bool]:
+    """Heuristic which picks what variable to split on, and what the initial guess should be.
+    The returned variable will always be its positive form.
+    E.g. returns (115, False)
+    """
+
+    # return list(literal_stats.keys())[0], False
+    purities = {}
+
+    # purities = { for (k,v) in literal_stats}
+
+    for var in literal_stats:
+        if abs(var) in purities:
+            continue
+
+        cp = literal_stats[abs(var)] if abs(var) in literal_stats else 0
+        cn = literal_stats[-abs(var)] if -abs(var) in literal_stats else 0
+        purities[abs(var)] = {
+            "ratio": max(cp / (cp + cn), cn / (cp + cn)),
+            "guess": cp > cn,
+        }
+
+    # sort variables by descending purity
+    # data = sorted(purities.keys(), key=lambda x: -purities[x]["ratio"])
+    # TODO: for now using ascending purity:
+    data = sorted(purities.keys(), key=lambda x: purities[x]["ratio"])
+    return data[0], purities[data[0]]["guess"]
+
+
 def simplify(
     system: Conjunction,
     model: Model,
     tautologies: bool = True,
     unit_clauses: bool = True,
-) -> Tuple[bool, MutableSet[int]]:
+) -> Tuple[bool, Dict]:
     """
-    Simplifies a system (in place) using 2 techniques (or a subset of them), and updates the (ongoing) model.
-    returns False if an inconsistency is found.
-    also returns the set of pure literals found in the system (when the system is consistent).
-
-    params:
-        system: the logic system
-        model: (partial) model for the logic system
-        unit_clauses:
-            Simplify the system by removing all unit clauses.
-        tautologies:
-            Simplify the system by removing all tautologies within disjunctions.
+    Like dpll.py.simplify() except it reports some stats about each literals occurences.
+    (e.g. for computing "purity ratio").
     """
     # logging.debug(f"in simplify, system = {system}\n")
     i = 0
-    all_literals = set()
+    # all_literals = set()
     run_again = False
+
+    # map each literal to an int counting its number of occurences
+    literals_stats = {}
+
     while True:
         if i > len(system) - 1:
             break
@@ -98,32 +119,32 @@ def simplify(
             system[i] = new_clause
             clause = system[i]
 
-        # apply model to simplify if possible
         if len(clause) == 0:
             system.pop(i)
             continue
 
+        # apply model to simplify if possible
         remove_tokens = set()
         clause_removed = False
         for t in clause:
             if abs(t) in model:
                 term_val = model[abs(t)] if t > 0 else not model[abs(t)]
                 if term_val == True:  # whole clause must be true
-                    logging.debug(
-                        f"removing clause (known to be true from model): {clause}"
-                    )
+                    # logging.debug(
+                    #    f"removing clause (known to be true from model): {clause}"
+                    # )
                     system.pop(i)
                     clause_removed = True
                     break
                 else:
-                    logging.debug(
-                        f"removing useless token {t} (where {abs(t)} = {model[abs(t)]}) from clause: {clause}"
-                    )
+                    # logging.debug(
+                    #    f"removing useless token {t} (where {abs(t)} = {model[abs(t)]}) from clause: {clause}"
+                    # )
                     remove_tokens.add(t)
         if clause_removed:
             continue
-        if remove_tokens:
-            logging.debug(f"remove_tokens = {remove_tokens}")
+        # if remove_tokens:
+        #    logging.debug(f"remove_tokens = {remove_tokens}")
         if len(clause) == len(remove_tokens):
             return False, set()  # inconsistent (no terms left to make clause true)
         system[i] = clause - remove_tokens
@@ -140,14 +161,15 @@ def simplify(
             run_again = True
             continue
 
-        all_literals = all_literals.union(
-            clause
-        )  # track all literals (still in system)
+        # track stats about all literals (still in system)
+        for t in clause:
+            if t not in literals_stats:
+                literals_stats[t] = 0
+            literals_stats[t] += 1
         i += 1
 
-    pure = set([t for t in all_literals if -t not in all_literals])
     if run_again:
         # there may be new unit clauses to handle:
         logging.debug("simplify: calling itself recursively")
         return simplify(system, model, tautologies=False, unit_clauses=True)
-    return True, pure
+    return True, literals_stats

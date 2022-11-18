@@ -3,6 +3,7 @@ import os
 import argparse
 import logging
 from satsolver import dimacs, dpll, puzzle, verify_model, model_to_system
+from satsolver import strategy2
 
 # DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -39,11 +40,6 @@ def main():
     )
 
     args = parser.parse_args()
-    if args.strategy not in [1, 2, 3]:
-        print(
-            f"ERROR: provided strategy ({args.strategy}) must be an int in range [1,3]"
-        )
-        exit(1)
     log_level = logging.DEBUG if args.debug else logging.INFO
     logging.basicConfig(level=log_level)
 
@@ -67,10 +63,21 @@ def main():
     print(f"running strategy {args.strategy} on system...\n")
     if args.strategy == 1:
         model = {}
-        res = dpll.dpll(system, model)
-    else:
+        res, stats = dpll.solver(system, model)
+        print("stats=")
+        print(stats)
+    elif args.strategy == 2:
+        model = {}
+        res, stats = strategy2.solver(system, model)
+        print("stats=")
+        print(stats)
+    elif args.strategy == 3:
         # TODO:
-        print("\nnot implemented yet!!!")
+        raise NotImplementedError()
+    else:
+        print(
+            f"ERROR: provided strategy ({args.strategy}) must be an int in range [1,3]"
+        )
         exit(1)
 
     if not res:
