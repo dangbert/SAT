@@ -7,8 +7,11 @@ from datetime import datetime
 import logging
 import math
 import matplotlib.pyplot as plt
+import random
 from satsolver import Conjunction, dimacs, puzzle, verify_model, Model, model_to_system
-from satsolver import dpll, strategy2
+from satsolver import dpll, strategy2, strategy_random
+import statistics
+import subprocess
 from tests.test_dpll import sudoku_tester
 import time
 from typing import List, Dict, Optional
@@ -45,15 +48,21 @@ def main():
     parser.add_argument(
         "-c", "--count", type=int, help="max number of problems to run on"
     )
-    # parser.add_argument(
-    #    "--shuffle", action="store_true", help="whether to shuffle dataset before using"
-    # )
+    parser.add_argument(
+        "-m", "--message", type=str, help="description of experiment (to save)"
+    )
+    parser.add_argument(
+        "--shuffle", action="store_true", help="whether to shuffle dataset before using"
+    )
     args = parser.parse_args()
 
     FORMAT = "[%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s"
     logging.basicConfig(format=FORMAT, level=logging.INFO)
 
     expname = datetime.now().strftime(f"%Y_%m_%d_%H_%M_%S")
+    if args.message:
+        msg = args.message.replace(" ", "_")[:25]
+        expname += "--" + msg
     # expname = "tmp"  # TODO for now
     outdir = os.path.join("experiments/", expname)
     if not os.path.exists(outdir):
@@ -71,15 +80,33 @@ def main():
     solvers = [
         dpll.solver,
         strategy2.solver,
+        strategy_random.solver,
     ]
     outpath = os.path.join(outdir, "stats.json")
     MAX_PUZZLES = args.count
     logging.info(f"max_Puzzles = {MAX_PUZZLES}")
     stats = generic_experiment(
-        RULES_9X9, fnames, solvers, max_puzzles=MAX_PUZZLES, outpath=outpath
+        RULES_9X9,
+        fnames,
+        solvers,
+        max_puzzles=MAX_PUZZLES,
+        outpath=outpath,
+        shuffle=args.shuffle,
+    )
+
+    GIT_HASH = (
+        subprocess.check_output(["git", "rev-parse", "--verify", "HEAD", "--short"])
+        .decode("utf-8")
+        .strip()
     )
 
     visualize_stats(stats, outdir)
+
+    msg = args.message if args.message else ""
+    with open(os.path.join(outdir, "about.txt"), "w") as f:
+        f.write(
+            f"{msg}\n\ncount={args.count}, shuffle={args.shuffle == True}\n{GIT_HASH}\n"
+        )
 
     # all_9x9()
     exit(0)
@@ -130,8 +157,9 @@ def generic_experiment(
     rules: Conjunction,
     fnames: List[str],
     solvers,
-    max_puzzles: Optional[int],
-    outpath: Optional[str],
+    max_puzzles: Optional[int] = None,
+    outpath: Optional[str] = None,
+    shuffle: Optional[bool] = False,
 ) -> Dict:
     # gather list of puzzle (systems) across files
     all_puzzles = []
@@ -143,8 +171,11 @@ def generic_experiment(
                 line = line.replace("\n", "")
                 all_puzzles.append(puzzle.encode_puzzle(line))
 
+    if shuffle:
+        logging.info("shuffling puzzles")
+        random.shuffle(all_puzzles)
     if max_puzzles is not None:
-        logging.info(f"limiting to {max_puzzles}")
+        logging.info(f"limiting to {max_puzzles} puzzles (of {len(all_puzzles)} total)")
         all_puzzles = all_puzzles[:max_puzzles]
 
     all_stats: List[Dict] = []
@@ -210,17 +241,22 @@ def visualize_stats(stats: Dict, outdir: str):
         # solver stats
         avg = 0.0
 
+        assert False not in ss["outcome"]
+
         for k, key in enumerate(keys):
             avg = sum(ss[key]) / len(ss[key])
+            stdev = statistics.stdev(ss[key])
             sample_length = len(ss[key])
 
             print(f"avg {key}: {avg:.3f}")
 
             splot = axis[i][k]
             splot.set_xlabel(f"{key} (n={sample_length})")
-            splot.set_ylabel(f"(avg = {avg:.3f})")
+            splot.set_ylabel(f"count")
             # splot.set_ylabel(f"voltage (mV?)")
-            splot.set_title(f"solver {i+1}: {key} (avg={avg:.3f})")
+            splot.set_title(f"solver {i+1}: {key} (avg={avg:.3f}, stdev={stdev:.3f})")
+            # TODO: ensure same bin sizes / axis ranges for all solver's historgrams (for this key)
+            # or use dot/frequency plot...
             splot.hist(ss[key], bins=10)
 
     graph_out = os.path.join(outdir, f"graphs.pdf")
