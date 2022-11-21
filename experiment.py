@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 """Run an experiment, reporting stats about different strategies etc."""
-import os
 import argparse
-import json
+from collections.abc import Callable
+import copy
+import ctypes
 from datetime import datetime
+import json
 import logging
 import math
 import matplotlib.pyplot as plt
+from multiprocessing import Process, Array, Value, cpu_count
+import os
 import random
 from satsolver import Conjunction, dimacs, puzzle, verify_model, Model, model_to_system
 from satsolver import dpll, strategy2, strategy_random
@@ -52,8 +56,12 @@ def main():
         "-m", "--message", type=str, help="description of experiment (to save)"
     )
     parser.add_argument(
+        "--cpus", type=int, default="1", help="number of cpus (processes) to use"
+    )
+    parser.add_argument(
         "--shuffle", action="store_true", help="whether to shuffle dataset before using"
     )
+    parser.add_argument("--seed", type=int, help="random seed to use")
     args = parser.parse_args()
 
     FORMAT = "[%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s"
@@ -69,10 +77,18 @@ def main():
         logging.info(f"using dir: {outdir}")
         os.makedirs(outdir)
 
+    args.cpus = min(args.cpus, cpu_count())
+
     # with open("stats.json", "r") as f:
     #    stats = json.load(f)
     # visualize_stats(stats, outdir)
     # exit(0)
+
+    # if args.seed is None:
+    #    args.seed = random.randint(0, 9999)
+    # rng = Random()
+    # rng.seed(args.seed)
+    # TODO: write about.txt now!
 
     # visualize_stats(stats, outdir)
     # fnames = FILES_9X9[:1]
@@ -89,6 +105,7 @@ def main():
         RULES_9X9,
         fnames,
         solvers,
+        args.cpus,
         max_puzzles=MAX_PUZZLES,
         outpath=outpath,
         shuffle=args.shuffle,
@@ -105,7 +122,7 @@ def main():
     msg = args.message if args.message else ""
     with open(os.path.join(outdir, "about.txt"), "w") as f:
         f.write(
-            f"{msg}\n\ncount={args.count}, shuffle={args.shuffle == True}\n{GIT_HASH}\n"
+            f"{msg}\n\ncount={args.count}, seed={args.seed}\nshuffle={args.shuffle == True}\n{GIT_HASH}\n"
         )
 
     # all_9x9()
@@ -156,7 +173,8 @@ def all_9x9():
 def generic_experiment(
     rules: Conjunction,
     fnames: List[str],
-    solvers,
+    solvers: List[Callable],
+    cpus: int,  # number of processes to use
     max_puzzles: Optional[int] = None,
     outpath: Optional[str] = None,
     shuffle: Optional[bool] = False,
@@ -179,41 +197,88 @@ def generic_experiment(
         all_puzzles = all_puzzles[:max_puzzles]
 
     all_stats: List[Dict] = []
+    # all_stats = Array(Dict, range(len(solvers)))
+
+    STATS_TEMPLATE = {
+        "cpu_times": [],  # time per puzzle
+        "outcome": [],  # result of puzzle solve (True if solved else False)
+        "backtracks": [],  # backtracks per puzzle
+    }
     for i in range(len(solvers)):
         logging.info(f"\n*** solver {i+1}/{len(solvers)} starting... ***")
         # TODO use pandas?
-        all_stats.append(
-            {
-                "cpu_times": [],  # time per puzzle
-                "outcome": [],  # result of puzzle solve (True if solved else False)
-                "backtracks": [],  # backtracks per puzzle
-            }
+        # all_stats.append(
+        #    {
+        #        "cpu_times": [],  # time per puzzle
+        #        "outcome": [],  # result of puzzle solve (True if solved else False)
+        #        "backtracks": [],  # backtracks per puzzle
+        #    }
+        # )
+
+        # just pass json (byte) string to process!
+        #   https://docs.python.org/2/library/ctypes.html#ctypes-fundamental-data-types-2
+        flat_stats = Array(
+            ctypes.c_char_p,
+            [json.dumps(STATS_TEMPLATE).encode("utf-8") for _ in range(cpus)],
         )
 
+        # tmp = {"heloo": 5, "x": -5}
+        # flat_stats[0] = json.dumps(tmp).encode("utf-8")
+
         solver = solvers[i]
-        for p, system in enumerate(all_puzzles):
-            system = system + rules
-            model: Model = {}
-            # https://docs.python.org/3/library/time.html#time.process_time
-            if p % max(10, math.floor(len(all_puzzles) / 20)) == 0:
-                logging.info(f"at puzzle {p+1}/{len(all_puzzles)}")
-            cpu_time = time.process_time()
-            res, stats = solver(system, model)
-            cpu_time = time.process_time() - cpu_time
+        systems = copy.deepcopy([system + rules for system in all_puzzles])
 
-            all_stats[i]["cpu_times"].append(cpu_time)
-            all_stats[i]["backtracks"].append(stats["backtracks"])
+        next_index = 0
+        bin_size = math.ceil(len(systems) / cpus)
+        plist: List[Process] = []
+        for c in range(cpus):
+            stop_index = min(next_index + bin_size, len(systems))
+            worker_systems = systems[next_index:stop_index]
+            logging.info(
+                f"starting worker {c+1}/{cpus} with {len(worker_systems)} problems ({next_index}:{stop_index})"
+            )
+            next_index += bin_size
 
-            valid, reason = verify_model(system, model)
-            # assert valid
-            all_stats[i]["outcome"].append(res and valid)
-            # all_stats[i]["puzzles_solved"] += 1 if res == True and valid else 0
+            # flat_stats[0] = json.dumps(cur_stats).encode("utf-8")
 
-            # if report_stats:
-            #    print(stats)
+            plist.append(
+                Process(
+                    target=_worker,
+                    args=(
+                        solver,
+                        worker_systems,
+                        flat_stats,
+                        c,
+                    ),
+                )
+            )
+            plist[-1].start()
 
-            # print("\n" + "".join(["_" for _ in range(board_size * 2)]))
-            # print(puzzle.visualize_sudoku_model(model, board_size=board_size))
+        for p in plist:
+            p.join()
+        # cur_stats_dict = json.loads(cur_stats.value.decode("utf-8"))
+        # all_stats.append(cur_stats_dict)
+
+        # flatten worker stats into single dict
+        joined_stats = {}
+        for fs in flat_stats:
+            s = json.loads(fs.decode("utf-8"))
+            for key in STATS_TEMPLATE.keys():
+                if key not in joined_stats:
+                    joined_stats[key] = []
+                joined_stats[key] += s[key]
+        all_stats.append(joined_stats)
+
+        # for p, system in enumerate(all_puzzles):
+        #    system = system + rules
+
+        # all_stats[i]["puzzles_solved"] += 1 if res == True and valid else 0
+
+        # if report_stats:
+        #    print(stats)
+
+        # print("\n" + "".join(["_" for _ in range(board_size * 2)]))
+        # print(puzzle.visualize_sudoku_model(model, board_size=board_size))
         logging.info(f"\n^^^ solver {i+1}/{len(solvers)} done. ^^^")
 
     if outpath is not None:
@@ -221,6 +286,38 @@ def generic_experiment(
             json.dump(all_stats, f, indent=2)  # write indented json to file
             logging.info(f"wrote stats to: {os.path.abspath(outpath)}")
     return all_stats
+
+
+def _worker(solver: Callable, systems: List[Conjunction], arr: Array, ai: int):
+    # def _worker(solver: Callable, systems: List[Conjunction], out_data: Value):
+    """Solve given systems and and update stats in arr[ai]."""
+
+    cur_stats = json.loads(arr[ai].decode("utf-8"))
+    for p, system in enumerate(systems):
+        model: Model = {}
+        # https://docs.python.org/3/library/time.html#time.process_time
+        if p % max(10, math.floor(len(systems) / 20)) == 0:
+            logging.info(f"at puzzle {p+1}/{len(systems)}")
+        cpu_time = time.process_time()
+        res, stats = solver(system, model)
+        cpu_time = time.process_time() - cpu_time
+
+        cur_stats["cpu_times"].append(cpu_time)
+        cur_stats["backtracks"].append(stats["backtracks"])
+
+        valid, reason = verify_model(system, model)
+        # assert valid
+        cur_stats["outcome"].append(res and valid)
+
+    print("cur_stats (bytes) =")
+    # with open("/tmp/cur.json", "w") as f:
+    #    json.dump(cur_stats, f, indent=2)
+    #    print("wrote file!")
+
+    print(json.dumps(cur_stats).encode("utf-8"))
+    # in the main process this ends up being garbage:
+    #   maybe because of https://stackoverflow.com/a/23816586
+    arr[ai] = json.dumps(cur_stats).encode("utf-8")
 
 
 def visualize_stats(stats: Dict, outdir: str):
