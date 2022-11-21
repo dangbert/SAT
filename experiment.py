@@ -18,7 +18,7 @@ import statistics
 import subprocess
 from tests.test_dpll import sudoku_tester
 import time
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 
 SCRIPT_DIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -50,6 +50,12 @@ def main():
     )
 
     parser.add_argument(
+        "-r",
+        "--replay",
+        type=str,
+        help="folder to reprocess stats.json (instead of running new experiment).",
+    )
+    parser.add_argument(
         "-c", "--count", type=int, help="max number of problems to run on"
     )
     parser.add_argument(
@@ -67,6 +73,19 @@ def main():
     FORMAT = "[%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s"
     logging.basicConfig(format=FORMAT, level=logging.INFO)
 
+    if args.replay:
+        fname = args.replay
+        if not fname.endswith(".json"):
+            fname = os.path.join(fname, "stats.json")
+        outdir = os.path.dirname(fname)
+        assert os.path.isdir(outdir) and os.path.exists(fname)
+
+        with open(fname, "r") as f:
+            stats = json.load(f)
+        logging.info(f"replaying stat visualization of: '{fname}'")
+        visualize_stats(stats, outdir)
+        exit(0)
+
     expname = datetime.now().strftime(f"%Y_%m_%d_%H_%M_%S")
     if args.message:
         msg = args.message.replace(" ", "_")[:25]
@@ -79,25 +98,18 @@ def main():
 
     args.cpus = min(args.cpus, cpu_count())
 
-    # with open("stats.json", "r") as f:
-    #    stats = json.load(f)
-    # visualize_stats(stats, outdir)
-    # exit(0)
-
     if args.seed is None:
         args.seed = random.randint(0, 9999)
     rng = random.Random()
     rng.seed(args.seed)
     logging.info(f"using random seed: {args.seed}")
 
-    # visualize_stats(stats, outdir)
-    # fnames = FILES_9X9[:1]
-    fnames = FILES_9X9
     solvers = [
-        dpll.solver,
-        strategy2.solver,
-        strategy_random.solver,
+        # (dpll.solver, "base algo"),
+        (strategy2.solver, "strategy2"),
+        # (strategy_random.solver, "random splitting"),
     ]
+    fnames = FILES_9X9
     outpath = os.path.join(outdir, "stats.json")
     MAX_PUZZLES = args.count
     logging.info(f"max_Puzzles = {MAX_PUZZLES}")
@@ -125,7 +137,6 @@ def main():
             f"{msg}\n\ncount={args.count}, seed={args.seed}\nshuffle={args.shuffle == True}\n{GIT_HASH}\n"
         )
 
-    # all_9x9()
     exit(0)
 
     rules = dimacs.parse_file(RULES_9X9)
@@ -140,9 +151,6 @@ def main():
     model: Model = {}
     res, stats = dpll.solver(system, model)
     valid, reason = verify_model(system, model)
-    import pdb
-
-    pdb.set_trace()
 
     assert res and valid
     grid = puzzle.visualize_sudoku_model(model, 4)
@@ -173,7 +181,7 @@ def all_9x9():
 def generic_experiment(
     rules: Conjunction,
     fnames: List[str],
-    solvers: List[Callable],
+    solvers: List[Tuple[Callable, str]],
     cpus: int,  # number of processes to use
     max_puzzles: Optional[int] = None,
     outpath: Optional[str] = None,
@@ -197,7 +205,6 @@ def generic_experiment(
         all_puzzles = all_puzzles[:max_puzzles]
 
     all_stats: List[Dict] = []
-    # all_stats = Array(Dict, range(len(solvers)))
 
     STATS_TEMPLATE = {
         "cpu_times": [],  # time per puzzle
@@ -214,7 +221,7 @@ def generic_experiment(
                 [copy.deepcopy(STATS_TEMPLATE) for _ in range(cpus)]
             )
 
-            solver = solvers[i]
+            solver, desc = solvers[i]
             systems = copy.deepcopy([system + rules for system in all_puzzles])
 
             next_index = 0
@@ -247,7 +254,7 @@ def generic_experiment(
             logging.info("all workers done!")
 
             # flatten worker stats into single dict
-            joined_stats = {}
+            joined_stats = {"desc": desc}
             for s in flat_stats:
                 for key in STATS_TEMPLATE.keys():
                     if key not in joined_stats:
@@ -284,7 +291,7 @@ def _worker(solver: Callable, systems: List[Conjunction], arr: Array, ai: int):
 
         valid, reason = verify_model(system, model)
         # assert valid
-        cur_stats["outcome"].append(res and valid)
+        cur_stats["outcome"].append(int(res and valid))
 
     arr[ai] = cur_stats
     logging.info("worker done!")
@@ -296,7 +303,10 @@ def visualize_stats(stats: Dict, outdir: str):
     keys = ["cpu_times", "backtracks"]
     num_solvers = len(stats)
     plt.clf()
-    fig, axis = plt.subplots(num_solvers, len(keys))
+    num_rows = num_solvers
+    fig, axis = plt.subplots(num_rows, len(keys))
+
+    # fig, axis = plt.subplots(num_solvers, len(keys))
     fig.tight_layout(h_pad=4)
     plt.gcf().set_size_inches(11, 8.5)
 
@@ -305,7 +315,8 @@ def visualize_stats(stats: Dict, outdir: str):
         # solver stats
         avg = 0.0
 
-        assert False not in ss["outcome"]
+        if isinstance(ss["outcome"], list):
+            assert 0 not in ss["outcome"], "ensure all successful"
 
         for k, key in enumerate(keys):
             avg = sum(ss[key]) / len(ss[key])
@@ -314,7 +325,10 @@ def visualize_stats(stats: Dict, outdir: str):
 
             print(f"avg {key}: {avg:.3f}")
 
-            splot = axis[i][k]
+            ax = axis
+            if len(axis.shape) > 1:
+                ax = axis[i]
+            splot = ax[k]
             splot.set_xlabel(f"{key} (n={sample_length})")
             splot.set_ylabel(f"count")
             # splot.set_ylabel(f"voltage (mV?)")
@@ -322,6 +336,16 @@ def visualize_stats(stats: Dict, outdir: str):
             # TODO: ensure same bin sizes / axis ranges for all solver's historgrams (for this key)
             # or use dot/frequency plot...
             splot.hist(ss[key], bins=10)
+
+            if "desc" in ss:
+                splot.text(
+                    0.5,
+                    -0.08,
+                    ss["desc"],
+                    size=12,
+                    ha="center",
+                    transform=splot.transAxes,
+                )
 
     graph_out = os.path.join(outdir, f"graphs.pdf")
     plt.savefig(graph_out, dpi=400)
