@@ -9,7 +9,7 @@ import json
 import logging
 import math
 import matplotlib.pyplot as plt
-from multiprocessing import Process, Array, Value, cpu_count
+from multiprocessing import Process, Array, Value, cpu_count, Manager
 import os
 import random
 from satsolver import Conjunction, dimacs, puzzle, verify_model, Model, model_to_system
@@ -84,11 +84,11 @@ def main():
     # visualize_stats(stats, outdir)
     # exit(0)
 
-    # if args.seed is None:
-    #    args.seed = random.randint(0, 9999)
-    # rng = Random()
-    # rng.seed(args.seed)
-    # TODO: write about.txt now!
+    if args.seed is None:
+        args.seed = random.randint(0, 9999)
+    rng = random.Random()
+    rng.seed(args.seed)
+    logging.info(f"using random seed: {args.seed}")
 
     # visualize_stats(stats, outdir)
     # fnames = FILES_9X9[:1]
@@ -206,79 +206,57 @@ def generic_experiment(
     }
     for i in range(len(solvers)):
         logging.info(f"\n*** solver {i+1}/{len(solvers)} starting... ***")
-        # TODO use pandas?
-        # all_stats.append(
-        #    {
-        #        "cpu_times": [],  # time per puzzle
-        #        "outcome": [],  # result of puzzle solve (True if solved else False)
-        #        "backtracks": [],  # backtracks per puzzle
-        #    }
-        # )
 
-        # just pass json (byte) string to process!
-        #   https://docs.python.org/2/library/ctypes.html#ctypes-fundamental-data-types-2
-        flat_stats = Array(
-            ctypes.c_char_p,
-            [json.dumps(STATS_TEMPLATE).encode("utf-8") for _ in range(cpus)],
-        )
-
-        # tmp = {"heloo": 5, "x": -5}
-        # flat_stats[0] = json.dumps(tmp).encode("utf-8")
-
-        solver = solvers[i]
-        systems = copy.deepcopy([system + rules for system in all_puzzles])
-
-        next_index = 0
-        bin_size = math.ceil(len(systems) / cpus)
-        plist: List[Process] = []
-        for c in range(cpus):
-            stop_index = min(next_index + bin_size, len(systems))
-            worker_systems = systems[next_index:stop_index]
-            logging.info(
-                f"starting worker {c+1}/{cpus} with {len(worker_systems)} problems ({next_index}:{stop_index})"
+        # https://superfastpython.com/multiprocessing-manager-example/
+        with Manager() as manager:
+            # process-safe shared list:
+            flat_stats = manager.list(
+                [copy.deepcopy(STATS_TEMPLATE) for _ in range(cpus)]
             )
-            next_index += bin_size
 
-            # flat_stats[0] = json.dumps(cur_stats).encode("utf-8")
+            solver = solvers[i]
+            systems = copy.deepcopy([system + rules for system in all_puzzles])
 
-            plist.append(
-                Process(
-                    target=_worker,
-                    args=(
-                        solver,
-                        worker_systems,
-                        flat_stats,
-                        c,
-                    ),
+            next_index = 0
+            bin_size = math.ceil(len(systems) / cpus)
+            plist: List[Process] = []
+            for c in range(cpus):
+                stop_index = min(next_index + bin_size, len(systems))
+                worker_systems = systems[next_index:stop_index]
+                logging.info(
+                    f"starting worker {c+1}/{cpus} with {len(worker_systems)} problems ({next_index}:{stop_index})"
                 )
-            )
-            plist[-1].start()
+                next_index += bin_size
 
-        for p in plist:
-            p.join()
-        # cur_stats_dict = json.loads(cur_stats.value.decode("utf-8"))
-        # all_stats.append(cur_stats_dict)
+                plist.append(
+                    Process(
+                        target=_worker,
+                        args=(
+                            solver,
+                            worker_systems,
+                            flat_stats,
+                            c,
+                        ),
+                    )
+                )
+                plist[-1].start()
 
-        # flatten worker stats into single dict
-        joined_stats = {}
-        for fs in flat_stats:
-            s = json.loads(fs.decode("utf-8"))
-            for key in STATS_TEMPLATE.keys():
-                if key not in joined_stats:
-                    joined_stats[key] = []
-                joined_stats[key] += s[key]
-        all_stats.append(joined_stats)
+            logging.info("awaiting workers...")
+            for p in plist:
+                p.join()
+            logging.info("all workers done!")
 
-        # for p, system in enumerate(all_puzzles):
-        #    system = system + rules
+            # flatten worker stats into single dict
+            joined_stats = {}
+            for s in flat_stats:
+                for key in STATS_TEMPLATE.keys():
+                    if key not in joined_stats:
+                        joined_stats[key] = []
+                    joined_stats[key] += s[key]
+            all_stats.append(joined_stats)
 
-        # all_stats[i]["puzzles_solved"] += 1 if res == True and valid else 0
-
-        # if report_stats:
-        #    print(stats)
-
-        # print("\n" + "".join(["_" for _ in range(board_size * 2)]))
-        # print(puzzle.visualize_sudoku_model(model, board_size=board_size))
+            # print("\n" + "".join(["_" for _ in range(board_size * 2)]))
+            # print(puzzle.visualize_sudoku_model(model, board_size=board_size))
         logging.info(f"\n^^^ solver {i+1}/{len(solvers)} done. ^^^")
 
     if outpath is not None:
@@ -289,10 +267,9 @@ def generic_experiment(
 
 
 def _worker(solver: Callable, systems: List[Conjunction], arr: Array, ai: int):
-    # def _worker(solver: Callable, systems: List[Conjunction], out_data: Value):
     """Solve given systems and and update stats in arr[ai]."""
 
-    cur_stats = json.loads(arr[ai].decode("utf-8"))
+    cur_stats = arr[ai]
     for p, system in enumerate(systems):
         model: Model = {}
         # https://docs.python.org/3/library/time.html#time.process_time
@@ -309,15 +286,8 @@ def _worker(solver: Callable, systems: List[Conjunction], arr: Array, ai: int):
         # assert valid
         cur_stats["outcome"].append(res and valid)
 
-    print("cur_stats (bytes) =")
-    # with open("/tmp/cur.json", "w") as f:
-    #    json.dump(cur_stats, f, indent=2)
-    #    print("wrote file!")
-
-    print(json.dumps(cur_stats).encode("utf-8"))
-    # in the main process this ends up being garbage:
-    #   maybe because of https://stackoverflow.com/a/23816586
-    arr[ai] = json.dumps(cur_stats).encode("utf-8")
+    arr[ai] = cur_stats
+    logging.info("worker done!")
 
 
 def visualize_stats(stats: Dict, outdir: str):
@@ -331,9 +301,6 @@ def visualize_stats(stats: Dict, outdir: str):
     plt.gcf().set_size_inches(11, 8.5)
 
     for i, ss in enumerate(stats):
-        # import pdb
-
-        # pdb.set_trace()
         print(f"\nsolver {i+1}/{len(stats)}:")
         # solver stats
         avg = 0.0
