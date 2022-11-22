@@ -12,27 +12,20 @@ def select_split(literal_stats: Dict) -> Tuple[int, bool]:
     The returned variable will always be its positive form.
     E.g. returns (115, False)
     """
-
-    # return list(literal_stats.keys())[0], False
     purities = {}
-
     # purities = { for (k,v) in literal_stats}
 
     for var in literal_stats:
-        if abs(var) in purities:
-            continue
-
-        cp = literal_stats[abs(var)] if abs(var) in literal_stats else 0
-        cn = literal_stats[-abs(var)] if -abs(var) in literal_stats else 0
+        cp = literal_stats[var]["cp"]
+        cn = literal_stats[var]["cn"]
+        purity = max(cp / (cp + cn), cn / (cp + cn))
         purities[abs(var)] = {
-            "ratio": max(cp / (cp + cn), cn / (cp + cn)),
+            "ratio": purity,
             "guess": cp > cn,
         }
 
-    # sort variables by descending purity
-    # data = sorted(purities.keys(), key=lambda x: -purities[x]["ratio"])
-    # TODO: for now using ascending purity:
-    data = sorted(purities.keys(), key=lambda x: purities[x]["ratio"])
+    # data = sorted(purities.keys(), key=lambda x: -purities[x]["ratio"]) # descending
+    data = sorted(purities.keys(), key=lambda x: purities[x]["ratio"])  # ascending
     return data[0], purities[data[0]]["guess"]
 
 
@@ -51,8 +44,8 @@ def simplify(
     # all_literals = set()
     run_again = False
 
-    # map each literal to an int counting its number of occurences
-    literals_stats = {}
+    # map each literal to a dict of stats
+    literal_stats = {}
 
     while True:
         if i > len(system) - 1:
@@ -110,16 +103,21 @@ def simplify(
 
         # track stats about all literals (still in system)
         for t in clause:
-            if t not in literals_stats:
-                literals_stats[t] = 0
-            literals_stats[t] += 1
+            if abs(t) not in literal_stats:
+                literal_stats[abs(t)] = {
+                    "clause_lengths": [],
+                    "cp": 0,  # num occurences as positive literal
+                    "cn": 0,  # num occurences as negative literal
+                }
+            literal_stats[abs(t)]["cp" if t > 0 else "cn"] += 1
+            literal_stats[abs(t)]["clause_lengths"].append(len(clause))
         i += 1
 
     if run_again:
         # there may be new unit clauses to handle:
         logging.debug("simplify: calling itself recursively")
         return simplify(system, model, tautologies=False, unit_clauses=True)
-    return True, literals_stats
+    return True, literal_stats
 
 
 solver = strategy_template.strategy_template(simplify, select_split)
