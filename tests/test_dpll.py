@@ -1,3 +1,4 @@
+from collections.abc import Callable
 import copy
 import os
 from satsolver import dpll, dimacs, Model, Conjunction, verify_model, puzzle
@@ -114,7 +115,7 @@ def test_simplify__finds_pure_literals():
 def test_sudoku_examples__4x4():
     """Verify dpll can solve set of 4x4 examples."""
     fname = os.path.join(ROOT_DIR, f"datasets/4x4.txt")
-    sudoku_tester(RULES_4X4, fname, 4)
+    sudoku_tester(RULES_4X4, fname, 4, solver=dpll.solver)
 
 
 def test_sudoku_examples__9x9_few():
@@ -150,11 +151,15 @@ def test_sudoku_examples__9x9_few():
 #        print("running on file: " + fname)
 #        fname = os.path.join(ROOT_DIR, "datasets", fname)
 #        assert os.path.exists(fname)
-#        sudoku_tester(RULES_9X9, fname, 9)
+#        sudoku_tester(RULES_9X9, fname, 9, solver=dpll.solver)
 
 
 def sudoku_tester(
-    rules_path: str, dataset_path: str, board_size: int, report_stats: bool = False
+    rules_path: str,
+    dataset_path: str,
+    board_size: int,
+    solver=Callable,
+    report_stats: bool = False,
 ):
     """Helper function."""
     size_desc = f"{board_size}x{board_size}"
@@ -169,7 +174,7 @@ def sudoku_tester(
             system = puzzle.encode_puzzle(line)
             system += rules
             model: Model = {}
-            res, stats = dpll.solver(system, model)
+            res, stats = solver(system, model)
             assert res
             if report_stats:
                 print(stats)

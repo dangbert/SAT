@@ -105,9 +105,9 @@ def main():
     logging.info(f"using random seed: {args.seed}")
 
     solvers = [
-        # (dpll.solver, "base algo"),
+        (dpll.solver, "base algo"),
         (strategy2.solver, "strategy2"),
-        # (strategy_random.solver, "random splitting"),
+        (strategy_random.solver, "random splitting"),
     ]
     fnames = FILES_9X9
     outpath = os.path.join(outdir, "stats.json")
