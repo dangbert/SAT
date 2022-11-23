@@ -3,7 +3,7 @@ import os
 import argparse
 import logging
 from satsolver import dimacs, dpll, puzzle, verify_model, model_to_system
-from satsolver import strategy2
+from satsolver import strategy2, strategy3
 
 # DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -72,8 +72,10 @@ def main():
         print("stats=")
         print(stats)
     elif args.strategy == 3:
-        # TODO:
-        raise NotImplementedError()
+        model = {}
+        res, stats = strategy3.solver(system, model)
+        print("stats=")
+        print(stats)
     else:
         print(
             f"ERROR: provided strategy ({args.strategy}) must be an int in range [1,3]"
