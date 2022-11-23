@@ -13,7 +13,7 @@ from multiprocessing import Process, Array, Value, cpu_count, Manager
 import os
 import random
 from satsolver import Conjunction, dimacs, puzzle, verify_model, Model, model_to_system
-from satsolver import dpll, strategy2, strategy_random
+from satsolver import dpll, strategy2, strategy3, strategy_random
 import statistics
 import subprocess
 from tests.test_dpll import sudoku_tester
@@ -105,9 +105,10 @@ def main():
     logging.info(f"using random seed: {args.seed}")
 
     solvers = [
-        (dpll.solver, "base algo"),
-        (strategy2.solver, "strategy2"),
-        (strategy_random.solver, "random splitting"),
+        # (dpll.solver, "base algo"),
+        # (strategy2.solver, "strategy2"),
+        (strategy3.solver, "strategy3"),
+        # (strategy_random.solver, "random splitting"),
     ]
     fnames = FILES_9X9
     outpath = os.path.join(outdir, "stats.json")
@@ -214,15 +215,21 @@ def generic_experiment(
     for i in range(len(solvers)):
         logging.info(f"\n*** solver {i+1}/{len(solvers)} starting... ***")
 
+        solver, desc = solvers[i]
+        systems = copy.deepcopy([system + rules for system in all_puzzles])
+        if cpus == 1:
+            # (skip extra overhead of using multiprocessing)
+            all_stats.append(copy.deepcopy(STATS_TEMPLATE))
+            _worker(solver, systems, all_stats, len(all_stats) - 1)
+            logging.info(f"\n^^^ solver {i+1}/{len(solvers)} done. ^^^")
+            continue
+
         # https://superfastpython.com/multiprocessing-manager-example/
         with Manager() as manager:
             # process-safe shared list:
             flat_stats = manager.list(
                 [copy.deepcopy(STATS_TEMPLATE) for _ in range(cpus)]
             )
-
-            solver, desc = solvers[i]
-            systems = copy.deepcopy([system + rules for system in all_puzzles])
 
             next_index = 0
             bin_size = math.ceil(len(systems) / cpus)
