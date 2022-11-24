@@ -75,7 +75,7 @@ def main():
     logging.basicConfig(format=FORMAT, level=logging.INFO)
 
     if args.replay:
-        fname = args.replay
+        fname = os.path.abspath(args.replay)
         if not fname.endswith(".json"):
             fname = os.path.join(fname, "stats.json")
         outdir = os.path.dirname(fname)
@@ -337,7 +337,6 @@ def _worker(
 def visualize_stats(stats: Dict, outdir: str):
     logging.info(f"processing stats...\n")
 
-    keys = ["cpu_times", "backtracks"]
     num_solvers = len(stats)
     plt.clf()
     # fig, ax1 = plt.subplots(num_rows, len(keys))
@@ -345,7 +344,9 @@ def visualize_stats(stats: Dict, outdir: str):
     # fig.tight_layout(h_pad=4)
     # plt.gcf().set_size_inches(11, 8.5)
 
+    keys = ["cpu_times", "backtracks"]
     var = "backtracks"  # measured variable to plot
+    # var = "cpu_times"
     var_title = "Backtracks"
     sample_lengths = []
 
@@ -365,70 +366,53 @@ def visualize_stats(stats: Dict, outdir: str):
             avg = sum(ss[key]) / len(ss[key])
             stdev = statistics.stdev(ss[key])
             sample_length = len(ss[key])
+            median = statistics.median(ss[key])
 
-            print(f"avg {key}: {avg:.3f}")
-            print(f"stdev {key}: {stdev:.3f}")
-            print(f"sample_length {key}: {sample_length}")
+            print(f"median {key}:\t{median:.3f}")
+            print(f"avg {key}:\t{avg:.3f}")
+            print(f"stdev {key}:\t{stdev:.3f}")
+            print(f"sample_length {key}:\t{sample_length}\n")
             sample_lengths.append(sample_length)
-
-            # for histogram:
-            """
-            ax = axis
-            if len(axis.shape) > 1:
-                ax = axis[i]
-            splot = ax[k]
-            splot.set_xlabel(f"{key} (n={sample_length})")
-            splot.set_ylabel(f"count")
-            # splot.set_ylabel(f"voltage (mV?)")
-            splot.set_title(f"solver {i+1}: {key} (avg={avg:.3f}, stdev={stdev:.3f})")
-            # TODO: ensure same bin sizes / axis ranges for all solver's historgrams (for this key)
-            # or use dot/frequency plot...
-            splot.hist(ss[key], bins=10)
-
-            if "desc" in ss:
-                splot.text(
-                    0.5,
-                    -0.08,
-                    ss["desc"],
-                    size=12,
-                    ha="center",
-                    transform=splot.transAxes,
-                )
-            """
 
     data = [ss[var] for ss in stats]
     descs = [
         ss["desc"] if "desc" in ss else f"Solver {i+1}" for i, ss in enumerate(stats)
     ]
 
-    # fig, axis = plt.subplots(len(data), 1)
-    # fig.tight_layout(h_pad=4)
-    # plt.gcf().set_size_inches(11, 8.5)
+    csv_out = os.path.join(outdir, f"stats.csv")
+    with open(csv_out, "w") as f:
+        writer = csv.writer(f)
+        writer.writerow([f"{desc} {var}" for desc in descs])
 
-    # fig = plt.figure(figsize=(11, 8.5))
-
-    # fig, ax1 = plt.subplots(figsize=(10, 6))
-    # bp = ax1.boxplot(data, notch=False, sym="+", vert=True, whis=1.5)
-
-    # ax = fig.add_axes([0, 0, 1, 1])
-    # ax.set_xticklabels([descs])
+        for n in range(max(sample_lengths)):
+            row_data = []
+            for s_idx in range(num_solvers):
+                val = ""
+                try:
+                    val = data[s_idx][n]
+                except IndexError as e:
+                    pass  # in case this solver's dataset has a lower sample_length
+                row_data.append(val)
+            writer.writerow(row_data)
+    print(f"\nwrote: {csv_out}")
 
     fig, axs = plt.subplots(2, len(data))
     fig.set_size_inches((11, 8.5))
+    fig.tight_layout(h_pad=4)
 
     ymax = max([max(d) for d in data])  # includes outliers
     ymin = 0
     ymax_no_outliers = 0
     for i in range(len(data)):
         d, desc = data[i], descs[i]
-        ax = axs[0, i]
+        ax = axs[0, i] if len(data) > 1 else axs[0]
         ax.boxplot(d)
         ax.set_title(desc)
         ax.set_ylabel(var)
         ax.set_ylim([ymin, ymax])
         ax.get_xaxis().set_visible(False)
 
-        ax = axs[1, i]
+        ax = axs[1, i] if len(data) > 1 else axs[1]
         ax.boxplot(d, 0, "")
         ax.set_title(f"{desc} (omitting outliers)")
         ax.set_ylabel(var)
@@ -437,7 +421,7 @@ def visualize_stats(stats: Dict, outdir: str):
 
     # ensure same bounds for bottom row of graphs
     for i in range(len(data)):
-        ax = axs[1, i]
+        ax = axs[1, i] if len(data) > 1 else axs[1]
         ax.set_ylim([ymin, ymax_no_outliers])
 
     # bp = axs.boxplot(data, notch="True")
@@ -454,25 +438,6 @@ def visualize_stats(stats: Dict, outdir: str):
         graph_out = os.path.join(outdir, f"graphs_new.pdf")
     plt.savefig(graph_out, dpi=400)
     print(f"wrote: {graph_out}")
-
-    csv_out = os.path.join(outdir, f"stats.csv")
-    with open(csv_out, "w") as f:
-        writer = csv.writer(f)
-        writer.writerow([f"{desc} {var}" for desc in descs])
-
-        for n in range(max(sample_lengths)):
-            row_data = []
-            for s_idx in range(num_solvers):
-                try:
-                    val = data[s_idx][n]
-                except IndexError as e:
-                    # in case this solver's dataset has a lower sample_length
-                    val = ""
-                row_data.append(val)
-            writer.writerow(row_data)
-    print(f"wrote: {csv_out}")
-
-    # plt.show()
 
 
 if __name__ == "__main__":
