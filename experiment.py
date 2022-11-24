@@ -3,6 +3,7 @@
 import argparse
 from collections.abc import Callable
 import copy
+import csv
 import ctypes
 from datetime import datetime
 import json
@@ -332,26 +333,33 @@ def _worker(
     logging.info("worker done!")
 
 
+# https://matplotlib.org/stable/gallery/statistics/boxplot_demo.html#boxplots
 def visualize_stats(stats: Dict, outdir: str):
     logging.info(f"processing stats...\n")
 
     keys = ["cpu_times", "backtracks"]
     num_solvers = len(stats)
     plt.clf()
-    num_rows = num_solvers
-    fig, axis = plt.subplots(num_rows, len(keys))
-
+    # fig, ax1 = plt.subplots(num_rows, len(keys))
     # fig, axis = plt.subplots(num_solvers, len(keys))
-    fig.tight_layout(h_pad=4)
-    plt.gcf().set_size_inches(11, 8.5)
+    # fig.tight_layout(h_pad=4)
+    # plt.gcf().set_size_inches(11, 8.5)
+
+    var = "backtracks"  # measured variable to plot
+    var_title = "Backtracks"
+    sample_lengths = []
 
     for i, ss in enumerate(stats):
-        print(f"\nsolver {i+1}/{len(stats)}:")
+        desc = "" if "desc" not in ss else ss["desc"]
+        if desc:
+            print(f"\nsolver {i+1}/{len(stats)} ({desc}):")
+        else:
+            print(f"\nsolver {i+1}/{len(stats)}:")
         # solver stats
         avg = 0.0
 
         if isinstance(ss["outcome"], list):
-            assert 0 not in ss["outcome"], "ensure all successful"
+            assert 0 not in ss["outcome"], "ensure all solves successful"
 
         for k, key in enumerate(keys):
             avg = sum(ss[key]) / len(ss[key])
@@ -359,7 +367,12 @@ def visualize_stats(stats: Dict, outdir: str):
             sample_length = len(ss[key])
 
             print(f"avg {key}: {avg:.3f}")
+            print(f"stdev {key}: {stdev:.3f}")
+            print(f"sample_length {key}: {sample_length}")
+            sample_lengths.append(sample_length)
 
+            # for histogram:
+            """
             ax = axis
             if len(axis.shape) > 1:
                 ax = axis[i]
@@ -381,10 +394,85 @@ def visualize_stats(stats: Dict, outdir: str):
                     ha="center",
                     transform=splot.transAxes,
                 )
+            """
+
+    data = [ss[var] for ss in stats]
+    descs = [
+        ss["desc"] if "desc" in ss else f"Solver {i+1}" for i, ss in enumerate(stats)
+    ]
+
+    # fig, axis = plt.subplots(len(data), 1)
+    # fig.tight_layout(h_pad=4)
+    # plt.gcf().set_size_inches(11, 8.5)
+
+    # fig = plt.figure(figsize=(11, 8.5))
+
+    # fig, ax1 = plt.subplots(figsize=(10, 6))
+    # bp = ax1.boxplot(data, notch=False, sym="+", vert=True, whis=1.5)
+
+    # ax = fig.add_axes([0, 0, 1, 1])
+    # ax.set_xticklabels([descs])
+
+    fig, axs = plt.subplots(2, len(data))
+    fig.set_size_inches((11, 8.5))
+
+    ymax = max([max(d) for d in data])  # includes outliers
+    ymin = 0
+    ymax_no_outliers = 0
+    for i in range(len(data)):
+        d, desc = data[i], descs[i]
+        ax = axs[0, i]
+        ax.boxplot(d)
+        ax.set_title(desc)
+        ax.set_ylabel(var)
+        ax.set_ylim([ymin, ymax])
+        ax.get_xaxis().set_visible(False)
+
+        ax = axs[1, i]
+        ax.boxplot(d, 0, "")
+        ax.set_title(f"{desc} (omitting outliers)")
+        ax.set_ylabel(var)
+        ymax_no_outliers = max(math.ceil(ax.get_ylim()[1]), ymax_no_outliers)
+        ax.get_xaxis().set_visible(False)
+
+    # ensure same bounds for bottom row of graphs
+    for i in range(len(data)):
+        ax = axs[1, i]
+        ax.set_ylim([ymin, ymax_no_outliers])
+
+    # bp = axs.boxplot(data, notch="True")
+
+    # ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
+    # axs.set_xticklabels(descs, rotation=45)
+    # axs.get_xaxis().tick_bottom()
+    # axs.get_yaxis().tick_left()
+
+    # plt.title(f"{var_title} of {len(stats)} Solvers")
 
     graph_out = os.path.join(outdir, f"graphs.pdf")
+    if os.path.exists(graph_out):
+        graph_out = os.path.join(outdir, f"graphs_new.pdf")
     plt.savefig(graph_out, dpi=400)
     print(f"wrote: {graph_out}")
+
+    csv_out = os.path.join(outdir, f"stats.csv")
+    with open(csv_out, "w") as f:
+        writer = csv.writer(f)
+        writer.writerow([f"{desc} {var}" for desc in descs])
+
+        for n in range(max(sample_lengths)):
+            row_data = []
+            for s_idx in range(num_solvers):
+                try:
+                    val = data[s_idx][n]
+                except IndexError as e:
+                    # in case this solver's dataset has a lower sample_length
+                    val = ""
+                row_data.append(val)
+            writer.writerow(row_data)
+    print(f"wrote: {csv_out}")
+
+    # plt.show()
 
 
 if __name__ == "__main__":
