@@ -14,6 +14,9 @@ def verify_model(system: Conjunction, model: Model) -> Tuple[bool, str]:
     Returns True if satisfied and False otherwise (along with a reason).
     """
 
+    if min(model.keys()) < 1:
+        return False, f"unexpected variable < 1 present in model: {min(model.keys())}"
+
     res = True
     clause: Disjunction
     for clause in system:

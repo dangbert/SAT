@@ -138,29 +138,6 @@ def main():
             f"{msg}\n\ncount={args.count}, seed={args.seed}\nshuffle={args.shuffle == True}\n{GIT_HASH}\n"
         )
 
-    exit(0)
-
-    rules = dimacs.parse_file(RULES_9X9)
-
-    # sudoku = "1.3....44....3.1"
-
-    # TODO:
-
-    # rules = dimacs.parse_file(RULES_4X4)
-    system = puzzle.encode_puzzle(sudoku) + rules
-
-    model: Model = {}
-    res, stats = dpll.solver(system, model)
-    valid, reason = verify_model(system, model)
-
-    assert res and valid
-    grid = puzzle.visualize_sudoku_model(model, 4)
-    print(grid)
-
-    solution = model_to_system(model)
-    print()
-    print(solution)
-
 
 def all_9x9():
     """Verify dpll can solve set of 9x9 examples."""
@@ -290,13 +267,14 @@ def _worker(solver: Callable, systems: List[Conjunction], arr: Array, ai: int):
         if p % max(10, math.floor(len(systems) / 20)) == 0:
             logging.info(f"at puzzle {p+1}/{len(systems)}")
         cpu_time = time.process_time()
+        orig_system = copy.deepcopy(system)
         res, stats = solver(system, model)
         cpu_time = time.process_time() - cpu_time
 
         cur_stats["cpu_times"].append(cpu_time)
         cur_stats["backtracks"].append(stats["backtracks"])
 
-        valid, reason = verify_model(system, model)
+        valid, reason = verify_model(orig_system, model)
         # assert valid
         cur_stats["outcome"].append(int(res and valid))
 

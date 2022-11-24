@@ -127,10 +127,11 @@ def test_sudoku_examples__9x9_few():
         fname = os.path.join(ROOT_DIR, f"example_sudokus/sudoku{n}.cnf")
         system = dimacs.parse_file(fname) + rules
         model: Model = {}
+        orig_system = copy.deepcopy(system)
 
         res, stats = dpll.solver(system, model)
         assert res
-        valid, reason = verify_model(system, model)
+        valid, reason = verify_model(orig_system, model)
         assert valid
         passed += 1
     print(f"{passed} 9x9 examples passed!")
@@ -173,14 +174,15 @@ def sudoku_tester(
             line = line.replace("\n", "")
             system = puzzle.encode_puzzle(line)
             system += rules
+            orig_system = copy.deepcopy(system)
             model: Model = {}
             res, stats = solver(system, model)
             assert res
             if report_stats:
                 print(stats)
 
-            valid, reason = verify_model(system, model)
-            assert valid
+            valid, reason = verify_model(orig_system, model)
+            assert valid, reason
             passed += 1
             # print("\n" + "".join(["_" for _ in range(board_size * 2)]))
             # print(puzzle.visualize_sudoku_model(model, board_size=board_size))

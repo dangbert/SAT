@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import argparse
+import copy
 import logging
 from satsolver import dimacs, dpll, puzzle, verify_model, model_to_system
 from satsolver import strategy2, strategy3
@@ -60,19 +61,18 @@ def main():
     if args.input2:
         system += dimacs.parse_file(args.input2)
 
+    orig_system = copy.deepcopy(system)
+    model = {}
     print(f"running strategy {args.strategy} on system...\n")
     if args.strategy == 1:
-        model = {}
         res, stats = dpll.solver(system, model)
         print("stats=")
         print(stats)
     elif args.strategy == 2:
-        model = {}
         res, stats = strategy2.solver(system, model)
         print("stats=")
         print(stats)
     elif args.strategy == 3:
-        model = {}
         res, stats = strategy3.solver(system, model)
         print("stats=")
         print(stats)
@@ -89,7 +89,7 @@ def main():
     if args.sudoku != None:
         print(puzzle.visualize_sudoku_model(model, board_size=args.sudoku))
     # sanity check (should always pass)
-    valid, reason = verify_model(system, model)
+    valid, reason = verify_model(orig_system, model)
     if not valid:
         print(f"ERROR: solution was invalid! reason = {reason}")
         exit(1)
