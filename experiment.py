@@ -13,7 +13,7 @@ from multiprocessing import Process, Array, Value, cpu_count, Manager
 import os
 import random
 from satsolver import Conjunction, dimacs, puzzle, verify_model, Model, model_to_system
-from satsolver import dpll, strategy2, strategy3, strategy_random
+from satsolver import dpll, strategy2, strategy3, strategy_random, strategy_template
 import statistics
 import subprocess
 from tests.test_dpll import sudoku_tester
@@ -104,12 +104,16 @@ def main():
     rng.seed(args.seed)
     logging.info(f"using random seed: {args.seed}")
 
+    """
     solvers = [
         (strategy2.solver, "strategy2"),
         (dpll.solver, "base algo"),
         # (strategy3.solver, "strategy3"),
         # (strategy_random.solver, "random splitting"),
     ]
+    """
+    solvers = get_purity_solvers()
+
     fnames = FILES_9X9
     outpath = os.path.join(outdir, "stats.json")
     MAX_PUZZLES = args.count
@@ -137,6 +141,33 @@ def main():
         f.write(
             f"{msg}\n\ncount={args.count}, seed={args.seed}\nshuffle={args.shuffle == True}\n{GIT_HASH}\n"
         )
+
+
+def get_purity_solvers():
+    """Get 4 varations of purity selection for comparision."""
+    return [
+        (strategy2.solver, "lowest_purity"),
+        (
+            strategy_template.strategy_template(
+                strategy_template.simplify, strategy2.select_lowest_purity__reversed
+            ),
+            "lowest_purity__reversed",
+        ),
+        (
+            strategy_template.strategy_template(
+                strategy_template.simplify,
+                strategy2.select_highest_purity,
+            ),
+            "highest_purity",
+        ),
+        (
+            strategy_template.strategy_template(
+                strategy_template.simplify,
+                strategy2.select_highest_purity__reversed,
+            ),
+            "highest_purity__reversed",
+        ),
+    ]
 
 
 def all_9x9():
@@ -206,6 +237,7 @@ def generic_experiment(
         if cpus == 1:
             # (skip extra overhead of using multiprocessing)
             all_stats.append(copy.deepcopy(STATS_TEMPLATE))
+            all_stats[-1]["desc"] = desc
             _worker(
                 solver, systems, all_stats, len(all_stats) - 1, write_stats=write_stats
             )

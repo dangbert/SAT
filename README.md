@@ -65,7 +65,7 @@ pytest -s -o log_cli=true -o log_cli_level=DEBUG
 ````
 
 ## Running experiments:
-You can run `./experiment.py` to run an experiment comparing several algorithms on the 9x9 sudoku dataset.  Manually updates the `solvers` list in the file if you want to customize which algorithms are tested.
+You can run `./experiment.py` to run an experiment comparing several algorithms on the 9x9 sudoku dataset.  Manually update the `solvers` list in the file if you want to customize which algorithms are tested.
 
 ````bash
 # see full usage/help

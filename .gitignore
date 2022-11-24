@@ -7,3 +7,4 @@ out.cnf
 # pyinstaller artifacts:
 build/
 dist/
+*.spec
