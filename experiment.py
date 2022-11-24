@@ -400,9 +400,13 @@ def visualize_stats(stats: Dict, outdir: str):
     fig.set_size_inches((11, 8.5))
     fig.tight_layout(h_pad=4)
 
+    if len(data) > 3:
+        fig.set_size_inches((11 * 1.25, 8.5 * 1.25))
+
     ymax = max([max(d) for d in data])  # includes outliers
     ymin = 0
     ymax_no_outliers = 0
+
     for i in range(len(data)):
         d, desc = data[i], descs[i]
         ax = axs[0, i] if len(data) > 1 else axs[0]
@@ -410,14 +414,20 @@ def visualize_stats(stats: Dict, outdir: str):
         ax.set_title(desc)
         ax.set_ylabel(var)
         ax.set_ylim([ymin, ymax])
-        ax.get_xaxis().set_visible(False)
+        # ax.get_xaxis().set_visible(False)
+        ax.set_xticks([])  # don't show any ticks/values on x axis
+        ax.set_xlabel(f"({chr(ord('a') + i)})", fontsize=14)
+
+        # ax.text( 0.0, 0.00, "(a)", multialignment="center", # ha="center", fontsize=12, bbox={"facecolor": "orange", "alpha": 0.5, "pad": 5})
 
         ax = axs[1, i] if len(data) > 1 else axs[1]
         ax.boxplot(d, 0, "")
-        ax.set_title(f"{desc} (omitting outliers)")
+        ax.set_title(f"{desc}\n(omitting outliers)")
         ax.set_ylabel(var)
         ymax_no_outliers = max(math.ceil(ax.get_ylim()[1]), ymax_no_outliers)
-        ax.get_xaxis().set_visible(False)
+        # ax.get_xaxis().set_visible(False)
+        ax.set_xticks([])  # don't show any ticks/values on x axis
+        ax.set_xlabel(f"({chr(ord('a') + len(data) + i)})", fontsize=14)
 
     # ensure same bounds for bottom row of graphs
     for i in range(len(data)):
@@ -433,9 +443,9 @@ def visualize_stats(stats: Dict, outdir: str):
 
     # plt.title(f"{var_title} of {len(stats)} Solvers")
 
-    graph_out = os.path.join(outdir, f"graphs.pdf")
-    if os.path.exists(graph_out):
-        graph_out = os.path.join(outdir, f"graphs_new.pdf")
+    graph_out = os.path.join(outdir, f"graphs_{var}.pdf")
+    # if os.path.exists(graph_out):
+    #    graph_out = os.path.join(outdir, f"graphs_new.pdf")
     plt.savefig(graph_out, dpi=400)
     print(f"wrote: {graph_out}")
 
