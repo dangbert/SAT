@@ -20,7 +20,7 @@ def test_other_strategies():
 
         passed = 0
         # for n in range(3, 5):  # for time test on just a few
-        for n in range(1, 5 + 1):
+        for n in range(1, 5):
             fname = os.path.join(ROOT_DIR, f"example_sudokus/sudoku{n}.cnf")
             print("testing on file: " + fname)
             system = dimacs.parse_file(fname) + rules

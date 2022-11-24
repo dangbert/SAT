@@ -1,9 +1,8 @@
 import copy
 import random
-from satsolver import Disjunction, Conjunction, Model, puzzle
-from satsolver import dpll, strategy2, strategy_template
+from satsolver import Conjunction, Model
+from satsolver import strategy_template
 
-# from satsolver.dpll import simplify
 from typing import MutableSet, Tuple, Dict
 import logging
 
@@ -15,5 +14,7 @@ def select_random(literal_stats: Dict) -> Tuple[int, bool]:
 
 def solver(system: Conjunction, model: Model) -> Tuple[bool, Dict]:
     # return strategy2.solver(system, model, heuristic=select_random)
-    func = strategy_template.strategy_template(strategy2.simplify, select_random)
+    func = strategy_template.strategy_template(
+        strategy_template.simplify, select_random
+    )
     return func(system, model)

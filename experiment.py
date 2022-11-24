@@ -105,9 +105,9 @@ def main():
     logging.info(f"using random seed: {args.seed}")
 
     solvers = [
-        # (dpll.solver, "base algo"),
-        # (strategy2.solver, "strategy2"),
-        (strategy3.solver, "strategy3"),
+        (strategy2.solver, "strategy2"),
+        (dpll.solver, "base algo"),
+        # (strategy3.solver, "strategy3"),
         # (strategy_random.solver, "random splitting"),
     ]
     fnames = FILES_9X9
@@ -189,6 +189,15 @@ def generic_experiment(
         "outcome": [],  # result of puzzle solve (True if solved else False)
         "backtracks": [],  # backtracks per puzzle
     }
+
+    def write_stats():
+        nonlocal outpath
+        nonlocal all_stats
+        if outpath is not None:
+            with open(outpath, "w") as f:
+                json.dump(all_stats, f, indent=2)  # write indented json to file
+                logging.info(f"wrote latest stats to: {os.path.abspath(outpath)}")
+
     for i in range(len(solvers)):
         logging.info(f"\n*** solver {i+1}/{len(solvers)} starting... ***")
 
@@ -197,8 +206,11 @@ def generic_experiment(
         if cpus == 1:
             # (skip extra overhead of using multiprocessing)
             all_stats.append(copy.deepcopy(STATS_TEMPLATE))
-            _worker(solver, systems, all_stats, len(all_stats) - 1)
+            _worker(
+                solver, systems, all_stats, len(all_stats) - 1, write_stats=write_stats
+            )
             logging.info(f"\n^^^ solver {i+1}/{len(solvers)} done. ^^^")
+            write_stats()
             continue
 
         # https://superfastpython.com/multiprocessing-manager-example/
@@ -236,6 +248,7 @@ def generic_experiment(
             for p in plist:
                 p.join()
             logging.info("all workers done!")
+            write_stats()
 
             # flatten worker stats into single dict
             joined_stats = {"desc": desc}
@@ -250,14 +263,17 @@ def generic_experiment(
             # print(puzzle.visualize_sudoku_model(model, board_size=board_size))
         logging.info(f"\n^^^ solver {i+1}/{len(solvers)} done. ^^^")
 
-    if outpath is not None:
-        with open(outpath, "w") as f:
-            json.dump(all_stats, f, indent=2)  # write indented json to file
-            logging.info(f"wrote stats to: {os.path.abspath(outpath)}")
+    write_stats()
     return all_stats
 
 
-def _worker(solver: Callable, systems: List[Conjunction], arr: Array, ai: int):
+def _worker(
+    solver: Callable,
+    systems: List[Conjunction],
+    arr: Array,
+    ai: int,
+    write_stats: Optional[Callable] = None,
+):
     """Solve given systems and and update stats in arr[ai]."""
 
     cur_stats = arr[ai]
@@ -266,6 +282,8 @@ def _worker(solver: Callable, systems: List[Conjunction], arr: Array, ai: int):
         # https://docs.python.org/3/library/time.html#time.process_time
         if p % max(10, math.floor(len(systems) / 20)) == 0:
             logging.info(f"at puzzle {p+1}/{len(systems)}")
+            if write_stats is not None:
+                write_stats()  # just to help track progress
         cpu_time = time.process_time()
         orig_system = copy.deepcopy(system)
         res, stats = solver(system, model)

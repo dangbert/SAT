@@ -66,22 +66,17 @@ def main():
     print(f"running strategy {args.strategy} on system...\n")
     if args.strategy == 1:
         res, stats = dpll.solver(system, model)
-        print("stats=")
-        print(stats)
     elif args.strategy == 2:
         res, stats = strategy2.solver(system, model)
-        print("stats=")
-        print(stats)
     elif args.strategy == 3:
         res, stats = strategy3.solver(system, model)
-        print("stats=")
-        print(stats)
     else:
         print(
             f"ERROR: provided strategy ({args.strategy}) must be an int in range [1,3]"
         )
         exit(1)
 
+    print(f"stats = {stats}\n")
     if not res:
         print("system is inconsistent!")
         exit(0)
