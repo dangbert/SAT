@@ -348,6 +348,7 @@ def visualize_stats(stats: Dict, outdir: str):
     var = "backtracks"  # measured variable to plot
     # var = "cpu_times"
     var_title = "Backtracks"
+    # var_title = "CPU Time (sec)"
     sample_lengths = []
 
     for i, ss in enumerate(stats):
@@ -398,10 +399,10 @@ def visualize_stats(stats: Dict, outdir: str):
 
     fig, axs = plt.subplots(2, len(data))
     fig.set_size_inches((11, 8.5))
-    fig.tight_layout(h_pad=4)
 
     if len(data) > 3:
-        fig.set_size_inches((11 * 1.25, 8.5 * 1.25))
+        fig.set_size_inches((11 * 1.25, 8.5 * 1.24))
+    fig.tight_layout(pad=6.0)
 
     ymax = max([max(d) for d in data])  # includes outliers
     ymin = 0
@@ -412,27 +413,80 @@ def visualize_stats(stats: Dict, outdir: str):
         ax = axs[0, i] if len(data) > 1 else axs[0]
         ax.boxplot(d)
         ax.set_title(desc)
-        ax.set_ylabel(var)
+        ax.set_ylabel(var_title)
         ax.set_ylim([ymin, ymax])
         # ax.get_xaxis().set_visible(False)
         ax.set_xticks([])  # don't show any ticks/values on x axis
-        ax.set_xlabel(f"({chr(ord('a') + i)})", fontsize=14)
+        ax.set_xlabel(f"({chr(ord('a') + i)})", fontsize=14, fontweight="bold")
 
         # ax.text( 0.0, 0.00, "(a)", multialignment="center", # ha="center", fontsize=12, bbox={"facecolor": "orange", "alpha": 0.5, "pad": 5})
 
         ax = axs[1, i] if len(data) > 1 else axs[1]
         ax.boxplot(d, 0, "")
         ax.set_title(f"{desc}\n(omitting outliers)")
-        ax.set_ylabel(var)
-        ymax_no_outliers = max(math.ceil(ax.get_ylim()[1]), ymax_no_outliers)
+        ax.set_ylabel(var_title)
         # ax.get_xaxis().set_visible(False)
         ax.set_xticks([])  # don't show any ticks/values on x axis
-        ax.set_xlabel(f"({chr(ord('a') + len(data) + i)})", fontsize=14)
+        ax.set_xlabel(
+            f"({chr(ord('a') + len(data) + i)})", fontsize=14, fontweight="bold"
+        )
+        ymax_no_outliers = max(math.ceil(ax.get_ylim()[1]), ymax_no_outliers)
 
-    # ensure same bounds for bottom row of graphs
+    """
+    # for manually adjusting scales of a subset of axs:
+    ymax_override_top = max(
+        math.ceil(axs[0, 0].get_ylim()[1]),
+        math.ceil(axs[0, 1].get_ylim()[1]),
+        math.ceil(axs[0, 2].get_ylim()[1]),
+    )
+    ymax_override_bottom = max(
+        math.ceil(axs[1, 0].get_ylim()[1]),
+        math.ceil(axs[1, 0].get_ylim()[1]),
+        math.ceil(axs[1, 2].get_ylim()[1]),
+    )
+    print(f"ymax override top, bottom = {ymax_override_top}, {ymax_override_bottom}")
+    """
+
+    # ensure same bounds across bottom row of graphs
     for i in range(len(data)):
         ax = axs[1, i] if len(data) > 1 else axs[1]
         ax.set_ylim([ymin, ymax_no_outliers])
+
+    # for "compare vs random" backtracks:
+    """
+    axs[0, 0].set_ylim([ymin, 4609])
+    axs[0, 1].set_ylim([ymin, 4609])
+    axs[0, 2].set_ylim([ymin, 4609])
+    axs[1, 0].set_ylim([ymin, 122])
+    axs[1, 1].set_ylim([ymin, 122])
+    axs[1, 2].set_ylim([ymin, 122])
+    """
+
+    # for "compare vs random" cpu_times:
+    """
+    axs[0, 0].set_ylim([ymin, 280])
+    axs[0, 1].set_ylim([ymin, 280])
+    axs[0, 2].set_ylim([ymin, 280])
+    axs[1, 0].set_ylim([ymin, 3])
+    axs[1, 1].set_ylim([ymin, 3])
+    axs[1, 2].set_ylim([ymin, 3])
+    """
+
+    # for 4purities backtracks:
+    """
+    axs[0, 0].set_ylim([ymin, 75])
+    axs[0, 1].set_ylim([ymin, 75])
+    axs[1, 0].set_ylim([ymin, 33])
+    axs[1, 1].set_ylim([ymin, 33])
+    """
+
+    # for 4purities cpu_times:
+    """
+    axs[0, 0].set_ylim([ymin, 3])
+    axs[0, 1].set_ylim([ymin, 3])
+    axs[1, 0].set_ylim([ymin, 1])
+    axs[1, 1].set_ylim([ymin, 1])
+    """
 
     # bp = axs.boxplot(data, notch="True")
 
